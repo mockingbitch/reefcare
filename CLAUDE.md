@@ -1,0 +1,137 @@
+# ReefCare — Claude Code Project Guide
+
+ReefCare is a production-oriented platform for marine reef aquarium management: water parameter
+monitoring, dosing, water changes, equipment, livestock, a unified tank timeline, a curated
+knowledge base, a provisional-assessment "Reef Intelligence" engine, and a community "Reef Clinic"
+with reputation.
+
+It is **not** a generic CRUD app or social network. Every tank is a structured, evolving dataset;
+measurements, dosing, water changes, equipment changes, livestock changes and symptoms are linked
+through a chronological timeline, and analysis must use that context, not isolated values.
+
+Act as Principal Architect, Senior Go Engineer, Product Analyst, PostgreSQL Architect and UI/UX
+Designer. Detailed, path-scoped rules live in `.claude/rules/` and load automatically.
+
+## Current status
+
+- Phase 0 design docs in `docs/` were accepted with the proposed defaults for D1–D12
+  (2026-10-29); the docs are the source of truth for design decisions.
+- Active phase: **Phase 1 — Foundation**. Milestone 1.1 (skeleton, config, logging, chi server,
+  health/readiness, graceful shutdown, pgx pool, embedded Goose migrations, Docker/Compose,
+  Makefile, golangci-lint) is done. 1.2 (sqlc → `internal/db/dbq`, `database.InTx`,
+  `dbtest.New` per-test databases, identity schema + queries) and 1.3 (`apperr` typed errors,
+  `httpserver.DecodeJSON` / `WriteAppError` / pagination / `ClientIP`, `ratelimit`) are done.
+  1.4 identity is done (`internal/identity`: register, verify email, login/logout, sessions
+  with auth_epoch revocation, CSRF, password reset/change, audit, async mail via
+  `internal/platform/mail`), reviewed by db-architect, go-reviewer and security-auditor with
+  findings fixed. Next: 1.5 profile (PATCH /me, account deactivation), then 1.6 tanks.
+- Unfinished work, known gaps and pending decisions are tracked in `docs/open-items.md`;
+  update it when an item is completed or a new gap is found.
+- Go module path is `reefcare`. Migrations use sequential numbering (`make migration name=...`).
+- Go may not be installed locally; the Makefile falls back to the `golang:1.27` container.
+- Do not generate the whole application. After Phase 0, summarize the architecture and **wait for
+  review** before large-scale implementation, unless explicitly told to proceed (then one phase at
+  a time, verifying each).
+- Update this section when a phase is completed.
+
+## Stack (unless the repo later establishes a better-justified alternative)
+
+- Backend: Go (latest stable), REST/JSON under `/api/v1`, `chi` router, `pgx/v5`, `sqlc`,
+  Goose migrations, `log/slog`, `context.Context` everywhere, OpenAPI in `api/openapi.yaml`.
+- Database: PostgreSQL (supported stable major) is the source of truth.
+- Frontend: SvelteKit + TypeScript in `web/` (propose and document before implementing).
+- Infra: Docker + Docker Compose (`compose.yaml`), S3-compatible object storage, CI pipeline.
+- Do **not** add ORMs, DI frameworks, Kubernetes, Kafka, microservices, or caching layers without
+  a measured, documented need. Prefer few, well-maintained dependencies.
+
+## Architecture: modular monolith
+
+```text
+cmd/api/main.go
+internal/{app,config,platform/{database,httpserver,logging,clock},identity,users,tanks,
+          waterparameters,dosing,waterchanges,equipment,livestock,maintenance,timeline,
+          knowledge,intelligence,community,reputation,notifications,moderation,audit}
+db/{migrations,queries}   api/openapi.yaml   web/   deploy/   scripts/   docs/
+```
+
+Create packages only when a phase needs them — no empty placeholder packages.
+
+Dependency rules:
+- Handlers translate HTTP ↔ application commands/queries. No business logic in handlers.
+- Application services own workflows and **explicit** transaction boundaries.
+- Domain logic is pure: no HTTP, SQL driver, or frontend imports.
+- Data access uses sqlc-generated code; no generic repository abstractions hiding SQL.
+- Constructor injection, no global mutable state, no circular package dependencies.
+- External providers (LLM, object storage, devices) sit behind small interfaces.
+
+## Non-negotiable domain rules
+
+- Store timestamps in UTC (`TIMESTAMPTZ`); render in the user's timezone. Vietnamese-first, i18n-ready.
+- Exact numerics (`NUMERIC`) for measurements and dosing quantities; preserve original value + unit.
+- Display volume ≠ total system volume — store both explicitly.
+- Never silently rewrite history (observations, livestock, case snapshots). Corrections are audited.
+- A missed schedule is never auto-marked completed.
+- Intelligence output is a **provisional assessment**, never a diagnosis; it never executes dosing
+  or equipment commands; it never fabricates sources. Deterministic features must work without an LLM.
+- Community rank is not an authorization role. Reputation is a ledger, not a mutable score.
+- Every tank-owned resource is authorization-checked; private tank data never leaks via public endpoints.
+
+## Workflow for every coding task
+
+1. **Inspect** the repo, docs, conventions; don't recreate working modules.
+2. **Analyze**: user problem, actors/permissions, business rules, data model, API contract,
+   failure cases, security, acceptance criteria, explicit assumptions.
+3. **Design** a short plan: files, schema/migrations, endpoints, domain logic, tests, risks.
+4. **Implement** in small reviewable increments; migrations + sqlc + validation + authz + tests +
+   OpenAPI + docs together. No placeholder code to fake progress.
+5. **Verify** with real commands (see below).
+6. **Review** for logic errors, data loss, races, missing authz, SQL inefficiency, duplication.
+7. **Summarize**: what was implemented, decisions, files, migrations, tests with *actual* results,
+   limitations, next step.
+
+Ask a clarifying question only when a decision materially affects correctness or causes major
+rework; otherwise choose a reasonable default and document it. Use the `/feature`, `/verify`,
+`/new-migration` and `/assessment-rule` skills for the matching workflows.
+
+## Commands
+
+```sh
+make up / down / logs   # dev stack: postgres 18, mailpit, migrate, api (:8080)
+make fmt | fmt-check    # gofmt
+make lint               # go vet (incl. integration tag) + golangci-lint v2 (container)
+make test               # unit tests, -race
+make test-integration   # -tags=integration against compose db `reefcare_test` (needs `make up`)
+make build | vuln       # bin/api | govulncheck
+make migration name=x   # new sequential Goose migration
+make migrate-up | migrate-down | migrate-status
+make sqlc | sqlc-check  # sqlc 1.31 (container), config db/sqlc.yaml
+# Not yet available: web checks (milestone 1.8)
+```
+
+If a command does not exist yet or a tool is missing locally, say so — never report a check as
+passed unless it actually ran and passed.
+
+## Definition of Done
+
+Business rules documented · schema + migrations correct · authorization implemented · API in
+OpenAPI · validation and error handling · automated tests for critical behavior · usable frontend
+states (loading/empty/error/success) · no sensitive data in logs · reproducible migrations and
+codegen · docs match code · verification reported honestly.
+
+## Roadmap
+
+- **Phase 0** — `docs/`: product-requirements, user-stories, domain-model, architecture,
+  database-design (with ER diagram), api-guidelines, security, knowledge-engine,
+  implementation-roadmap; acceptance criteria, risks, open product decisions.
+- **Phase 1** — Foundation: bootstrap, config, DB, migrations, sqlc, logging, health, auth,
+  profiles, tank CRUD, ownership policies, Compose, CI.
+- **Phase 2** — Reef management: water tests, targets, trends API, dosing, water changes,
+  equipment, maintenance, livestock, timeline, notifications/jobs.
+- **Phase 3** — Reef Intelligence: knowledge base, deterministic metrics, rules, evidence-linked
+  assessments, history, feedback, optional LLM behind an interface.
+- **Phase 4** — Community: posts/media, cases, comments, votes, outcomes, reputation ledger,
+  ranks, badges, leaderboards, moderation.
+- **Phase 5** — Production readiness: security review, query tuning, backups, observability,
+  rate limiting, load tests, deployment, ops docs.
+
+Complete and verify each vertical slice before expanding scope.

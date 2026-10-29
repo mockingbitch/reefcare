@@ -1,0 +1,59 @@
+# Local development environment. Not for production (see docs/architecture.md §7).
+name: reefcare
+
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: reefcare
+      POSTGRES_PASSWORD: reefcare
+      POSTGRES_DB: reefcare
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      # PostgreSQL 18 images keep data under /var/lib/postgresql/<major>/docker.
+      - pgdata:/var/lib/postgresql
+      - ./deploy/dev/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reefcare -d reefcare"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mailpit:
+    image: axllent/mailpit:v1.29
+    ports:
+      - "127.0.0.1:8025:8025" # web UI
+      - "127.0.0.1:1025:1025" # SMTP
+
+  migrate:
+    build: .
+    command: ["migrate", "up"]
+    environment: &api-env
+      APP_ENV: development
+      DATABASE_URL: postgres://reefcare:reefcare@db:5432/reefcare?sslmode=disable
+      LOG_FORMAT: text
+      LOG_LEVEL: debug
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build: .
+    command: ["serve"]
+    environment:
+      <<: *api-env
+      HTTP_ADDR: ":8080"
+      PUBLIC_BASE_URL: http://localhost:8080
+      ALLOWED_ORIGINS: http://localhost:5173 # SvelteKit dev server (milestone 1.8)
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      MAIL_FROM: ReefCare <no-reply@reefcare.local>
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:

@@ -1,0 +1,25 @@
+# Claude Code — personal, not shared
+.claude/settings.local.json
+CLAUDE.local.md
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Go
+/bin/
+/tmp/
+*.test
+*.out
+coverage.*
+
+# Frontend
+web/node_modules/
+web/.svelte-kit/
+web/build/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

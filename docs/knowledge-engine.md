@@ -1,0 +1,191 @@
+# ReefCare — Knowledge Base and Reef Intelligence Engine
+
+Status: **Draft for review** (Phase 0)
+
+## 1. Purpose and boundaries
+
+The engine turns a tank's structured history into **provisional assessments**: what the data
+shows, what it might mean, what evidence supports or contradicts each possibility, and what to
+verify next. It is **not** a diagnostic system and never acts on equipment.
+
+Design constraints:
+1. Deterministic first. Metrics and rules run without any LLM and are fully testable.
+2. Evidence-linked. Every claim points to stored readings/events or a reviewed knowledge version.
+3. Reproducible. Each assessment stores its input snapshot, rule version and knowledge version.
+4. Honest about uncertainty. Missing/stale data is reported, not papered over.
+
+## 2. Knowledge base
+
+### Content model
+- `knowledge_articles` (stable `slug`, category) → `knowledge_article_versions` (immutable once
+  published; edits create a new version) → `knowledge_sources` (citations).
+- Structured fields used by rules: `parameters[]`, `symptoms[]`, `conditions` (e.g.
+  `{"parameter":"alkalinity","change_per_day_gt":"0.5"}`), `verifications[]`,
+  `recommendations[]` (each conditional), `contraindications[]`, `safety_warnings[]`.
+- **Claim class** per version and per recommendation: `established` (scientific or manufacturer
+  documented), `expert` (reviewed interpretation), `community` (reported experience),
+  `unverified` (hypothesis). Rules may only produce *recommendations* from `established` or
+  `expert` items; `community`/`unverified` may appear only as labeled alternative explanations.
+- Review workflow: `draft → in_review → published → retired`. Publishing requires a reviewer
+  (admin or verified specialist) different from the author. Community anecdotes are never
+  auto-promoted.
+- Locales: each version has a `locale`; `vi` and `en` versions of the same article share the slug.
+- `knowledge_version` (string) = hash of the set of published version ids used by the rule set at
+  assessment time.
+
+### Seed content (MVP)
+Small, reviewed set backing MVP rules only, e.g.: alkalinity stability, calcium/alkalinity/magnesium
+relationship, nitrate & phosphate basics, salinity measurement and refractometer calibration,
+temperature stability, nitrogen cycle and ammonia/nitrite in established tanks, test-kit accuracy
+and re-testing. **No sources are invented**; where a source cannot be verified the article is
+marked `unverified` and kept out of recommendation paths.
+
+## 3. Pipeline
+
+```mermaid
+flowchart TD
+  A[1. Load authorized tank context] --> B[2. Validate completeness & freshness]
+  B --> C[3. Normalize units]
+  C --> D[4. Deterministic metrics]
+  D --> E[5. Rule evaluation - versioned]
+  E --> F[6. Retrieve knowledge by rule refs + parameters/symptoms]
+  F --> G[7. Compose structured assessment]
+  G --> H{8. Validate evidence & references}
+  H -- invalid claims --> G2[drop / downgrade claim]
+  G2 --> I
+  H -- ok --> I[9. Persist assessment + snapshot + versions]
+  I --> J[10. Present + request missing observations]
+  G -. optional, later .-> L[LLM narrative adapter]
+  L -.-> H
+```
+
+1. **Load** (service layer, after `Authorizer.Require(read)`): last 90 days of readings, current and
+   historical targets, dosing plans + events, water changes, equipment config changes, livestock
+   events, symptom/treatment notes, tank volumes and type. Only this tank's data.
+2. **Validate**: per parameter, count and age of readings vs freshness window; detect gaps,
+   conflicting readings (two readings of same parameter within 2 h differing beyond kit tolerance),
+   flagged readings.
+3. **Normalize**: canonical units already stored; re-verify conversions; reject unknown units.
+4. **Metrics** (pure functions, `shopspring/decimal`):
+   - latest value, age, delta vs previous, rolling mean/min/max (7/30 days)
+   - linear slope per day (least squares over window, min 3 points)
+   - variability: max day-to-day change, range within 7 days
+   - target status: below / within / above, using the target valid at `measured_at`
+   - dosing adherence: completed vs scheduled occurrences, planned vs actual totals
+   - water-change cadence and estimated replaced fraction
+   - livestock losses in window
+5. **Rules**: code-defined, each with id, version, inputs, preconditions (data sufficiency),
+   condition, output template, knowledge refs, safety warnings. `rule_version` = semver of the rule
+   set.
+6. **Knowledge retrieval**: by rule-declared article slugs plus parameter/symptom tags; published
+   versions only, in the user's locale with fallback.
+7. **Compose** the typed model (below).
+8. **Validate**: each evidence id exists and belongs to the tank; each knowledge ref is a published
+   version; hypotheses without supporting evidence are removed; recommendations from
+   non-`established`/`expert` items are demoted to "things others have reported".
+9. **Persist** in one transaction with `assessment_evidence`, refs, and a timeline event.
+10. **Present**: summary, observations, hypotheses, verifications, warnings; prompt for missing data.
+
+## 4. Output model
+
+```go
+type Assessment struct {
+    ID                    uuid.UUID
+    TankID                uuid.UUID
+    Type                  AssessmentType   // parameter_deviation, parameter_instability, dosing_mismatch,
+                                           // equipment_suspect, livestock_change, change_symptom_link,
+                                           // data_quality, next_measurements
+    Status                string
+    Summary               Text             // i18n key + params
+    Observations          []Observation    // factual, each with EvidenceRefs
+    Hypotheses            []Hypothesis
+    AlternativeExplanations []Hypothesis
+    MissingInformation    []MissingItem
+    RecommendedVerifications []Verification
+    SafetyWarnings        []SafetyWarning
+    KnowledgeReferences   []KnowledgeRef   // article version ids
+    ConfidenceLabel       Confidence       // low | moderate | high | not_assessed
+    InputSnapshotVersion  int
+    RuleVersion           string
+    KnowledgeVersion      string
+    CreatedAt             time.Time
+}
+
+type Hypothesis struct {
+    Key          string
+    Statement    Text
+    ClaimClass   ClaimClass
+    Supporting   []EvidenceRef
+    Contradicting []EvidenceRef
+    Missing      []MissingItem
+}
+```
+
+### Confidence basis (documented, not probabilistic)
+- `not_assessed`: data sufficiency precondition failed.
+- `low`: one supporting data point, or any contradicting evidence, or any input stale.
+- `moderate`: ≥ 2 independent supporting readings within freshness, no contradicting evidence.
+- `high`: `moderate` conditions **and** confirmation by a repeat test or a second method/kit.
+No percentages are shown.
+
+## 5. MVP rule set (v1.0.0)
+
+| Rule id | Type | Preconditions | Condition (initial thresholds, reviewable) | Output highlights |
+|---|---|---|---|---|
+| `DQ-STALE` | data_quality | — | latest reading older than freshness window, or none | lists parameters to test |
+| `DQ-CONFLICT` | data_quality | ≥ 2 readings within 2 h | difference > kit tolerance | ask to re-test / check kit |
+| `DQ-IMPLAUSIBLE-JUMP` | data_quality | previous reading ≤ 7 days | change exceeds parameter-specific "suspicious jump" (e.g. alk > 1.5 dKH/day, salinity > 2 ppt/day) | **re-test before acting** |
+| `PD-OUT-OF-TARGET` | parameter_deviation | reading fresh | outside current target | hypotheses from rule-linked knowledge; verifications |
+| `PI-ALK-SWING` | parameter_instability | ≥ 3 alk readings in 7 days | range > 1.0 dKH in 7 days | relate to dosing adherence & water changes as *possible* links |
+| `PI-TREND` | parameter_instability | ≥ 3 points over ≥ 5 days | slope projects leaving target within 7 days | early notice, no correction amount |
+| `DM-ADHERENCE` | dosing_mismatch | active plan with target parameter | < 80% of occurrences completed in 7 days and target parameter trending away | suggests checking dosing records/pump |
+| `LC-LOSSES` | livestock_change | — | ≥ 2 deaths in 7 days or any loss after a recent change event (≤ 72 h) | welfare escalation warning; temporal link labeled *correlation* |
+| `NH-AMMONIA-NITRITE` | parameter_deviation | tank status `active` | ammonia or nitrite > hard welfare threshold | **urgent** warning; verify with second test; escalation guidance |
+| `NM-NEXT` | next_measurements | always | — | recommended tests based on stale data and tank type |
+
+Thresholds are product decisions to be reviewed by a reef-domain reviewer before release
+(decision D5) and live in versioned rule code, not in user-editable config.
+
+## 6. Safety rules (enforced in validation step)
+
+- No causal language ("caused by"); templates use "may be related to", "coincides with".
+- No dose-correction amounts in MVP. Correction calculators (later) must cap per-day change,
+  require recent confirmed readings and show assumptions.
+- No image-only conclusions (images aren't analyzed in MVP).
+- Urgent welfare warnings (ammonia/nitrite, rapid losses, temperature extremes) always included
+  when triggered and cannot be removed by later steps.
+- Never trigger device or dosing actions; assessments have no side effects except persistence and
+  notifications.
+
+## 7. Triggers
+
+- Manual (`POST /tanks/{id}/assessments`), rate limited.
+- After a water test (job `intelligence.assess_after_test`, dedupe per water test).
+- Daily staleness (`DQ-STALE` only, produces notification, not a full assessment).
+
+## 8. LLM integration (later, optional)
+
+```go
+type NarrativeGenerator interface {
+    Narrate(ctx context.Context, in NarrativeInput) (NarrativeOutput, error)
+}
+```
+- `NarrativeInput`: the composed deterministic assessment + knowledge excerpts; no PII.
+- Output may only rephrase summary and explanations, and propose hypotheses referencing **existing**
+  evidence ids and knowledge version ids; validation step 8 rejects anything else.
+- Timeouts (10 s), no retries on 4xx, circuit breaker; when unavailable the deterministic assessment
+  is returned unchanged (`narrative: null`).
+- Provider configured by `LLM_PROVIDER` (default `none`).
+
+## 9. Testing
+
+Fixture tanks in `internal/intelligence/testdata/` (JSON): stable tank, alk swing, stale data,
+conflicting readings, mixed units, ammonia spike, losses after equipment change, LLM down.
+Golden-file tests compare rule outputs; property tests check that every hypothesis has ≥ 1
+supporting evidence and every knowledge ref exists.
+
+## 10. Feedback loop
+
+`assessment_feedback` (useful / not useful / wrong + outcome). Reviewers use "wrong" feedback to
+adjust rules (new `rule_version`) or knowledge (new article version). Past assessments are never
+rewritten; they can be marked `retracted` with a reason.

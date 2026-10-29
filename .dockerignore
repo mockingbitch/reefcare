@@ -1,0 +1,11 @@
+.git
+.claude
+.env
+.env.*
+!.env.example
+docs
+web
+bin
+tmp
+*.test
+*.out
