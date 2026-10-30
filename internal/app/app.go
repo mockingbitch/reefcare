@@ -17,6 +17,7 @@ import (
 
 	"reefcare/db"
 	"reefcare/internal/config"
+	"reefcare/internal/dosing"
 	"reefcare/internal/identity"
 	"reefcare/internal/platform/clock"
 	"reefcare/internal/platform/database"
@@ -138,15 +139,20 @@ func New(d Deps) App {
 	// Every module holding user data registers how to erase it (docs/security.md §9).
 	// Order matters: tank-owned modules first, then tanks (FKs are RESTRICT).
 	idSvc.OnErase(waterchanges.EraseUserData)
+	idSvc.OnErase(dosing.EraseUserData)
 	idSvc.OnErase(tanks.EraseUserData)
 	idSvc.RegisterJobs(runner)
 	idHTTP := identity.NewHandler(idSvc, d.Log, d.Config.SecureCookies())
 	tankSvc := tanks.NewService(d.Pool, d.Clock, tanks.DefaultLimits(d.Clock), d.Log)
 	tankSvc.OnArchive(waterchanges.OnTankArchived)
+	tankSvc.OnArchive(dosing.OnTankArchived)
 	tankHTTP := tanks.NewHandler(tankSvc, idHTTP.RequireAuth, d.Log)
 	wcSvc := waterchanges.NewService(d.Pool, d.Clock, d.Log)
 	wcSvc.RegisterJobs(runner)
 	wcHTTP := waterchanges.NewHandler(wcSvc, idHTTP.RequireAuth, d.Log)
+	doseSvc := dosing.NewService(d.Pool, d.Clock, d.Log)
+	doseSvc.RegisterJobs(runner)
+	doseHTTP := dosing.NewHandler(doseSvc, idHTTP.RequireAuth, d.Log)
 
 	var observe func(http.Handler) http.Handler
 	if d.Metrics != nil {
@@ -160,8 +166,9 @@ func New(d Deps) App {
 		Mount: func(api chi.Router) {
 			api.Use(idHTTP.Authenticate)
 			idHTTP.Mount(api)
-			tankHTTP.Mount(api, wcHTTP.MountTank)
+			tankHTTP.Mount(api, wcHTTP.MountTank, doseHTTP.MountTank)
 			wcHTTP.Mount(api)
+			doseHTTP.Mount(api)
 		},
 	})
 	return App{Handler: handler, Jobs: runner}

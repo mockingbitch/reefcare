@@ -83,6 +83,17 @@ equation; the result is labeled an estimate.
 - **DosingProduct** — global (curated) or user-private; manufacturer, category, components,
   documented concentration (optional, with source), dosage instructions, unit, warnings.
 - **ProductStock** — user's container(s) of a product: size, opened date, batch, expiry, remaining.
+- Implemented (milestone 2.4): products (curated or private; form liquid/powder/tablet/other;
+  units ml/l/drops/g/mg/tablets, constrained by form), plans with the recurrence subset,
+  occurrences 7 days ahead; after min(12 h, half the plan spacing) the scheduler sets `missed`
+  (manual plans) or `unconfirmed` (pump plans — ReefCare cannot know whether the pump
+  delivered; not put on the timeline). Resolve: completed (= planned amount; default actual =
+  planned with `actual_source = planned_default`), partial (< planned), > 1.5× planned only with
+  explicit confirmation (flagged `deviation: over`), skipped/failed (reason; failed may record
+  an amount). Late doses need an explicit `executed_at`. Resolving a missed dose overwrites the
+  status, keeps `missed_at`, and its timeline event carries `previous_status`/`corrected_at`
+  (that is the correction record). Statuses `cancelled` and delivery method `integration` from
+  the sketch below were dropped; amounts are > 0. Stocks and target parameters are open items.
 - **DosingPlan** — tank + product + amount + unit + schedule (RRULE subset) + timezone + start/end +
   delivery method + target parameters + status (`active`, `paused`, `completed`).
 - **DosingOccurrence/Event** — one scheduled or ad-hoc dose. `scheduled_for` (nullable for

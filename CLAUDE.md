@@ -37,8 +37,9 @@ Designer. Detailed, path-scoped rules live in `.claude/rules/` and load automati
   register account erasers with `identity.Service.OnErase`). 2.5 water changes is done
   (`internal/waterchanges`, shared recurrence subset in `internal/platform/recurrence`; tank-owned
   modules mount under `/tanks/{tankID}` via `tanks.Handler.Mount(api, subs...)` and authorize with
-  `tanks.Authorizer`). Next: 2.4 dosing (reuses recurrence/materialization) or 2.1 once the D5
-  domain reviewer is named.
+  `tanks.Authorizer`). 2.4 dosing is done (`internal/dosing`: products, plans, missed-dose
+  scheduler, resolve, ad-hoc doses with per-row Idempotency-Key). Next: 2.6 equipment &
+  maintenance or 2.7 livestock; 2.1/2.2 once the D5 domain reviewer is named.
 - Unfinished work, known gaps and pending decisions are tracked in `docs/open-items.md`;
   update it when an item is completed or a new gap is found.
 - Go module path is `reefcare`. Migrations use sequential numbering (`make migration name=...`).

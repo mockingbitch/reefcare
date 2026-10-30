@@ -125,3 +125,13 @@ func TestDivRound(t *testing.T) {
 		t.Fatal("division by zero must fail")
 	}
 }
+
+func TestMul(t *testing.T) {
+	for _, c := range []struct{ a, b, want string }{
+		{"5", "1.5", "7.5"}, {"0.0005", "1.5", "0.00075"}, {"-2", "3", "-6"}, {"12.25", "0", "0"},
+	} {
+		if got := MustParse(c.a).Mul(MustParse(c.b)).String(); got != c.want {
+			t.Errorf("%s×%s = %s, want %s", c.a, c.b, got, c.want)
+		}
+	}
+}

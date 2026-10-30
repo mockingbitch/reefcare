@@ -188,6 +188,14 @@ writes; anyone else gets 404.
 }
 ```
 
+Dosing as implemented (2.4): products are `GET/POST /dosing-products` (curated + own; private
+products are usable only on the owner's tanks, else `product_not_found`); `pause`/`resume` are
+idempotent and `complete` is terminal (`plan_completed`); resolve accepts `completed` (actual
+defaults to planned), `partial` (`actual_amount` < planned), `skipped`/`failed` (reason). Ad-hoc
+`POST /tanks/{id}/dosing-events` honours `Idempotency-Key` (8–128 chars): a retry returns the first
+dose with `Idempotent-Replayed: true`; another body with the same key is 422
+`idempotency_key_reused`.
+
 ### Water changes
 | Method | Path | Auth |
 |---|---|---|

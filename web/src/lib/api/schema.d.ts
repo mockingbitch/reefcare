@@ -837,8 +837,9 @@ export interface paths {
         /**
          * Archive a tank (owner; terminal, idempotent)
          * @description Archived tanks stay readable but can no longer change. Records `tank.archived` on the
-         *     timeline. Water-change schedules end, upcoming occurrences are removed and changes still
-         *     open (including overdue ones) are resolved as skipped with reason code `tank_archived`.
+         *     timeline. Water-change schedules end and dosing plans complete, upcoming occurrences are
+         *     removed, and water changes still open (including overdue ones) and still-scheduled doses
+         *     are resolved as skipped with reason code `tank_archived`; missed doses stay missed.
          */
         post: {
             parameters: {
@@ -1462,6 +1463,681 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/dosing-products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The curated catalog and the caller's own products */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Curated products first, then the caller's (never paginated). */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: components["schemas"]["DosingProduct"][];
+                            next_cursor: null;
+                        };
+                    };
+                };
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+            };
+        };
+        put?: never;
+        /**
+         * Create a private product (at most 200)
+         * @description No concentration is stored or inferred; ReefCare records amounts only.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        brand?: string | null;
+                        form: components["schemas"]["DosingForm"];
+                        default_unit: components["schemas"]["DoseUnit"];
+                        notes?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Created. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DosingProduct"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                /** @description `limit_reached` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                422: components["responses"]["Unprocessable"];
+                429: components["responses"]["RateLimited"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tanks/{tankID}/dosing-plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                tankID: components["parameters"]["TankID"];
+            };
+            cookie?: never;
+        };
+        /** List the tank's dosing plans (owner or viewer) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    tankID: components["parameters"]["TankID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description All plans, oldest first (never paginated). */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: components["schemas"]["DosingPlan"][];
+                            next_cursor: null;
+                        };
+                    };
+                };
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        /**
+         * Create a recurring dosing plan (owner)
+         * @description Occurrences are created 7 days ahead at once and kept ahead by an hourly job.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    tankID: components["parameters"]["TankID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["DosingPlanCreate"];
+                };
+            };
+            responses: {
+                /** @description Created. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DosingPlan"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `tank_archived` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `validation_failed`; field codes include `product_not_found`, `incompatible_unit`, `invalid_rrule`, `unsupported_rrule_part`, `before_start`. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                429: components["responses"]["RateLimited"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dosing-plans/{planID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                planID: components["parameters"]["DosingPlanID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit a plan (owner, merge patch, `version` required)
+         * @description Changes to amount, unit or timing replace upcoming occurrences nobody acted on; missed and resolved doses stay.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    planID: components["parameters"]["DosingPlanID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["DosingPlanPatch"];
+                };
+            };
+            responses: {
+                /** @description Updated. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DosingPlan"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `version_conflict`, `plan_completed` or `tank_archived` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                422: components["responses"]["Unprocessable"];
+                429: components["responses"]["RateLimited"];
+            };
+        };
+        trace?: never;
+    };
+    "/api/v1/dosing-plans/{planID}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                planID: components["parameters"]["DosingPlanID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pause a plan (upcoming occurrences are removed; idempotent) */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    planID: components["parameters"]["DosingPlanID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The plan. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DosingPlan"];
+                    };
+                };
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `plan_completed` or `tank_archived` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                429: components["responses"]["RateLimited"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dosing-plans/{planID}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                planID: components["parameters"]["DosingPlanID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resume a paused plan (occurrences are created again from now; idempotent) */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    planID: components["parameters"]["DosingPlanID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The plan. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DosingPlan"];
+                    };
+                };
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `plan_completed` or `tank_archived` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                429: components["responses"]["RateLimited"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dosing-plans/{planID}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                planID: components["parameters"]["DosingPlanID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete a plan for good (upcoming occurrences are removed; terminal) */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    planID: components["parameters"]["DosingPlanID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The plan. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DosingPlan"];
+                    };
+                };
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `plan_completed` or `tank_archived` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                429: components["responses"]["RateLimited"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tanks/{tankID}/dosing-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                tankID: components["parameters"]["TankID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Dose events, newest event time first (owner or viewer)
+         * @description Event time is `executed_at` when dosed, else `scheduled_for`.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Comma-separated subset of `scheduled`, `completed`, `partial`, `skipped`, `failed`, `missed`, `unconfirmed`. Default all. */
+                    status?: string;
+                    from?: string;
+                    to?: string;
+                    limit?: components["parameters"]["Limit"];
+                    /** @description Opaque `next_cursor` from the previous page. */
+                    cursor?: components["parameters"]["Cursor"];
+                };
+                header?: never;
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    tankID: components["parameters"]["TankID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A page of dose events. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: components["schemas"]["DoseEvent"][];
+                            next_cursor: string | null;
+                        };
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tanks/{tankID}/dosing-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                tankID: components["parameters"]["TankID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a dose given without a plan (owner; idempotent with Idempotency-Key)
+         * @description With `Idempotency-Key`, a retry returns the first dose (header `Idempotent-Replayed: true`)
+         *     instead of creating a duplicate; the same key with a different request is 422
+         *     `idempotency_key_reused`. Adds `dosing.completed` to the timeline.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                    "Idempotency-Key"?: string;
+                };
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    tankID: components["parameters"]["TankID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        product_id: string;
+                        amount: components["schemas"]["Decimal"];
+                        amount_unit: components["schemas"]["DoseUnit"];
+                        /**
+                         * Format: date-time
+                         * @description Default now; not in the future.
+                         */
+                        executed_at?: string;
+                        notes?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Recorded (or replayed). */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DoseEvent"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `tank_archived` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `validation_failed` or `idempotency_key_reused` */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                429: components["responses"]["RateLimited"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dosing-events/{eventID}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                eventID: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record what happened to a scheduled, missed or unconfirmed dose (owner, idempotent)
+         * @description - `completed`: the planned amount was given (`actual_amount` defaults to it, stored with
+         *       `actual_source: planned_default`); less is `partial` (`use_partial`); more than 1.5× the
+         *       planned amount needs `confirm_over_planned: true` (`confirm_over_planned`).
+         *     - `partial`: `actual_amount` required and less than planned.
+         *     - `skipped` / `failed`: `reason` required; `failed` may record the amount that went in.
+         *     - A missed or unconfirmed dose resolved as given needs an explicit `executed_at`
+         *       (`required_for_late_dose`): was it given on time and not logged, or late? Never
+         *       defaulted to now. `executed_at` may not be more than a day before the scheduled time.
+         *     Repeating the same outcome returns 200; a different one 409 `already_resolved`. Adds
+         *     `dosing.<status>` to the timeline; resolving a missed/unconfirmed dose carries
+         *     `previous_status` and `corrected_at` in its summary.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    eventID: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {unknown} */
+                        status: "completed" | "partial" | "skipped" | "failed";
+                        actual_amount?: components["schemas"]["Decimal"];
+                        /**
+                         * Format: date-time
+                         * @description completed/partial only; default now unless the dose is missed/unconfirmed.
+                         */
+                        executed_at?: string;
+                        /** @default false */
+                        confirm_over_planned?: boolean;
+                        reason?: string | null;
+                        notes?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Resolved. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DoseEvent"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `already_resolved` or `tank_archived` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                422: components["responses"]["Unprocessable"];
+                429: components["responses"]["RateLimited"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1818,6 +2494,150 @@ export interface components {
             salt_mix?: string | null;
             notes?: string | null;
         };
+        /**
+         * @description Must suit the product form: liquid ml/l/drops, powder g/mg or ml/l (dissolved, "prepared solution"), tablet tablets, other any (`incompatible_unit`). Units are never converted into each other; drop size varies by bottle.
+         * @enum {unknown}
+         */
+        DoseUnit: "ml" | "l" | "drops" | "g" | "mg" | "tablets";
+        /** @enum {unknown} */
+        DosingForm: "liquid" | "powder" | "tablet" | "other";
+        DosingProduct: {
+            /** Format: uuid */
+            id: string;
+            /** @description Catalog entry (true) or the caller's own product. */
+            curated: boolean;
+            name: string;
+            brand: string | null;
+            form: components["schemas"]["DosingForm"];
+            default_unit: components["schemas"]["DoseUnit"];
+            notes: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        DosingProductRef: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            brand?: string | null;
+            form?: components["schemas"]["DosingForm"];
+        };
+        DosingPlan: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tank_id: string;
+            product: components["schemas"]["DosingProductRef"];
+            amount: components["schemas"]["Decimal"];
+            amount_unit: components["schemas"]["DoseUnit"];
+            rrule: components["schemas"]["RRule"];
+            timezone: string;
+            /** Format: date */
+            starts_on: string;
+            /** Format: date */
+            ends_on: string | null;
+            /**
+             * @description Recorded only; ReefCare never controls a pump.
+             * @enum {unknown}
+             */
+            delivery_method: "manual" | "dosing_pump";
+            /** @enum {unknown} */
+            status: "active" | "paused" | "completed";
+            notes: string | null;
+            next_occurrences: string[];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            version: number;
+        };
+        DosingPlanCreate: {
+            /**
+             * Format: uuid
+             * @description A curated product or one of the owner's own (`product_not_found`).
+             */
+            product_id: string;
+            amount: components["schemas"]["Decimal"];
+            amount_unit: components["schemas"]["DoseUnit"];
+            rrule: components["schemas"]["RRule"];
+            timezone: string;
+            /**
+             * Format: date
+             * @description 2000-01-01 to ten years ahead
+             */
+            starts_on: string;
+            /** Format: date */
+            ends_on?: string | null;
+            /**
+             * @default manual
+             * @enum {unknown}
+             */
+            delivery_method: "manual" | "dosing_pump";
+            notes?: string | null;
+        };
+        DosingPlanPatch: {
+            version: number;
+            amount?: components["schemas"]["Decimal"];
+            amount_unit?: components["schemas"]["DoseUnit"];
+            rrule?: components["schemas"]["RRule"];
+            timezone?: string;
+            /** Format: date */
+            starts_on?: string;
+            /** Format: date */
+            ends_on?: string | null;
+            /** @enum {unknown} */
+            delivery_method?: "manual" | "dosing_pump";
+            notes?: string | null;
+        };
+        DoseEvent: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tank_id: string;
+            /** Format: uuid */
+            plan_id: string | null;
+            product: components["schemas"]["DosingProductRef"];
+            /** Format: date-time */
+            scheduled_for: string | null;
+            planned_amount: components["schemas"]["Decimal"] | null;
+            actual_amount: components["schemas"]["Decimal"] | null;
+            /** @enum {unknown} */
+            actual_source: "entered" | "planned_default" | null;
+            /**
+             * @description actual vs planned amount.
+             * @enum {unknown}
+             */
+            deviation: "over" | "under" | null;
+            amount_unit: components["schemas"]["DoseUnit"];
+            /**
+             * @description Set only by the scheduler when still scheduled after min(12 h, half the plan's spacing): `missed` for manual plans, `unconfirmed` for pump plans (ReefCare cannot know whether the pump delivered). Never auto-completed.
+             * @enum {unknown}
+             */
+            status: "scheduled" | "completed" | "partial" | "skipped" | "failed" | "missed" | "unconfirmed";
+            /** Format: date-time */
+            executed_at: string | null;
+            /** @description The keeper's words. */
+            reason: string | null;
+            /**
+             * @description System reason.
+             * @enum {unknown}
+             */
+            reason_code: "tank_archived" | "plan_paused" | "plan_changed" | null;
+            notes: string | null;
+            /** @enum {unknown} */
+            reported_by: "manual" | "device" | null;
+            /**
+             * Format: date-time
+             * @description Set when the scheduler marked it missed; kept after a later resolution.
+             */
+            missed_at: string | null;
+            /** Format: date-time */
+            resolved_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            version: number;
+        };
     };
     responses: {
         /** @description Accepted. */
@@ -1900,6 +2720,8 @@ export interface components {
         CSRF: string;
         /** @description A malformed ID is answered like an unknown one (404). */
         TankID: string;
+        /** @description A malformed ID is answered like an unknown one (404). */
+        DosingPlanID: string;
         /** @description A malformed ID is answered like an unknown one (404). */
         WaterChangeID: string;
         Limit: number;

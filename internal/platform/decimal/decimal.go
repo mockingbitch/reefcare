@@ -177,3 +177,14 @@ func (d Decimal) DivRound(o Decimal, places int) (Decimal, error) {
 	q := new(big.Rat).Quo(d.rat(), o.rat())
 	return Parse(q.FloatString(places))
 }
+
+// Mul returns the exact product d × o (a product of finite decimals is a finite decimal).
+func (d Decimal) Mul(o Decimal) Decimal {
+	_, fd := d.Digits()
+	_, fo := o.Digits()
+	out, err := Parse(new(big.Rat).Mul(d.rat(), o.rat()).FloatString(fd + fo))
+	if err != nil { // unreachable: FloatString yields plain notation
+		panic("decimal: " + err.Error())
+	}
+	return out
+}

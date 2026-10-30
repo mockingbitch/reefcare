@@ -161,6 +161,8 @@ Implemented in `internal/platform/jobs` (milestone 2.3, decision D3: in-house).
 | `identity.erase_due` | hourly | enqueue `identity.erase_account` for accounts deactivated > 30 days |
 | `identity.erase_account` | per account | module erasers + anonymize the users row |
 | `waterchanges.materialize` | hourly | keep occurrences of active schedules 35 days ahead |
+| `dosing.materialize` | hourly | keep occurrences of active plans 7 days ahead |
+| `dosing.mark_missed` | every 15 min | still-scheduled doses past their grace become `missed` (never completed) |
 | `jobs.cleanup` | daily | delete old succeeded and dead jobs |
 
 Planned (later milestones): `dosing.materialize`, `dosing.mark_missed`, `waterchanges.materialize`,

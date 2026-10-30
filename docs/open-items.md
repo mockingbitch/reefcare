@@ -61,12 +61,26 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 | W1 | Measured salinity/temperature and pre/post water-test links on water changes | P2 | Need the parameter catalog and units (2.1/2.2, decision D5) |
 | W2 | Water-change reminders (in-app/email) | P2 | Milestone 2.9; overdue is already derivable |
 | W3 | Web screens for schedules and water changes | P2 | Milestone 2.10 (API and generated types are ready) |
-| W4 | `Idempotency-Key` header for retried creates (`POST /tanks/{id}/water-changes`) | P3 | Complete/skip are naturally idempotent; a retried POST of a one-off change can create a duplicate. Build the shared `idempotency_keys` table with dosing (2.4) |
+| W4 | `Idempotency-Key` header for retried creates (`POST /tanks/{id}/water-changes`) | P3 | Complete/skip are naturally idempotent; a retried POST of a one-off change can create a duplicate. Reuse the per-row pattern from dosing ad-hoc doses (idempotency_key + request_hash) |
 | W5 | Dilution projection after n changes (docs/domain-model.md, with its caveats) | P3 | Needs measured new-water values (2.2), exact decimal powers, a batch/continuous `method` field, and D5 review |
 | W6 | UI requirements from the domain review (for 2.10) | P2 | Show "monthly on the 28th" when a start on the 29th–31st is capped; show the next 3 dates before saving a schedule; use `next_occurrences` (not materialized rows) for "next change" when the interval exceeds 35 days; "< 0.1 %" for tiny fractions; overdue wording calm ("complete or skip when you can"); prompt (optional) to record new-water salinity and temperature on completion |
 | W7 | "Skip all overdue" with one reason | P3 | Several missed weekly changes otherwise need one skip each |
 | W8 | Ordinal weekdays (`BYDAY=1SA`, "first Saturday") and "last day of month" | P3 | Rejected today with `invalid_rrule`; common enough to add with `BYSETPOS` |
 | W9 | Gallon input | P3 | Volumes are litres only. If gallons are accepted, store the original value and unit and convert explicitly (US 3.785411784 L, Imperial 4.54609 L — never guess which) |
+
+## 3c. Dosing (milestone 2.4 done)
+
+| # | Item | Priority | Notes |
+|---|---|---|---|
+| DS1 | Product stocks (bottle/bag on hand, deducted per dose, low-stock reminder) | P2 | `product_stocks` from the design is not built yet |
+| DS2 | Target parameters on plans (e.g. alkalinity) | P2 | Needs the parameter catalog (2.1, D5) |
+| DS3 | Curated product catalog seed | P2 | Seed data in `db/seed/` must be reviewed by the D5 domain expert; until then only private products exist |
+| DS4 | Device-reported doses (pump integrations) | P3 | `reported_by = 'device'` is reserved; ingestion must be idempotent per device event id. ReefCare never controls a pump |
+| DS5 | Web screens for products, plans and history | P2 | Milestone 2.10. Domain-review requirements: one-tap "Dosed {planned} {unit} of {product}?" (never auto-confirm, never "mark all done"); "When did you dose this?" for late doses (at the scheduled time / just now); warn when a late dose falls near the next one or another dose of the same product; confirm ad-hoc doses > ~3× the plan or in an unusual unit (heuristic); wording "Missed doses are not made up automatically…" (expert guidance, not established fact); drop-size hint for `drops`; "ReefCare does not know whether your pump delivered this dose" for unconfirmed |
+| DS6 | Pump plans as a daily total | P3 | Micro-dosing pumps run 24–48+ times a day; today each occurrence becomes `unconfirmed`. Consider one occurrence per day (daily total) for `dosing_pump` plans |
+| DS7 | Count-style units (scoop, capful, ampoule) and a "prepared solution" product linked to its dry product | P3 | Never treated as mass or volume; no derived concentration |
+| DS8 | `reason_code` for water changes | P3 | Water changes still store the archive skip as `skip_reason = 'tank_archived'` (free text); dosing uses a separate `reason_code` column |
+| DS9 | Composite FK from water_change_events (schedule_id, tank_id) to schedules | P3 | Dosing has it (plan_id, tank_id, product_id); add to water changes in a new migration |
 
 ## 4. Security and identity follow-ups
 

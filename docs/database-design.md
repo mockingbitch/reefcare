@@ -318,6 +318,12 @@ CREATE TABLE product_stocks (
   version       int NOT NULL DEFAULT 1
 );
 
+-- Implemented in db/migrations/00007_dosing.sql (milestone 2.4) with: no product_stocks yet
+-- (open item DS1); dosing_products has form/default_unit and owner_id NULL = curated;
+-- plans drop stock_id, target_parameters (wait for the parameter catalog, 2.1) and the
+-- 'integration' delivery method; events drop 'cancelled' (edits delete upcoming rows),
+-- add missed_after/missed_at/resolved_at/notes and per-row idempotency_key + request_hash
+-- (UNIQUE per recorded_by) instead of a shared idempotency_keys table.
 CREATE TABLE dosing_plans (
   id              uuid PRIMARY KEY DEFAULT uuidv7(),
   tank_id         uuid NOT NULL REFERENCES tanks(id) ON DELETE RESTRICT,

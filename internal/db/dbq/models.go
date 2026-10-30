@@ -37,6 +37,65 @@ type AuthToken struct {
 	Email     string
 }
 
+type DosingEvent struct {
+	ID             uuid.UUID
+	TankID         uuid.UUID
+	PlanID         *uuid.UUID
+	ProductID      uuid.UUID
+	ScheduledFor   *time.Time
+	MissedAfter    *time.Time
+	PlannedAmount  *decimal.Decimal
+	ActualAmount   *decimal.Decimal
+	ActualSource   *string
+	AmountUnit     string
+	Status         string
+	ExecutedAt     *time.Time
+	Reason         *string
+	ReasonCode     *string
+	Notes          *string
+	ReportedBy     *string
+	MissedAt       *time.Time
+	ResolvedAt     *time.Time
+	RecordedBy     *uuid.UUID
+	IdempotencyKey *string
+	RequestHash    []byte
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	Version        int32
+}
+
+type DosingPlan struct {
+	ID                uuid.UUID
+	TankID            uuid.UUID
+	ProductID         uuid.UUID
+	Amount            decimal.Decimal
+	AmountUnit        string
+	Rrule             string
+	Timezone          string
+	StartsOn          time.Time
+	EndsOn            *time.Time
+	DeliveryMethod    string
+	Status            string
+	Notes             *string
+	MaterializedUntil *time.Time
+	CreatedBy         *uuid.UUID
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	Version           int32
+}
+
+type DosingProduct struct {
+	ID          uuid.UUID
+	OwnerID     *uuid.UUID
+	Name        string
+	Brand       *string
+	Form        string
+	DefaultUnit string
+	Notes       *string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
 type Job struct {
 	ID          int64
 	Kind        string

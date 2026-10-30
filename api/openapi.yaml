@@ -29,6 +29,7 @@ tags:
   - name: profile
   - name: tanks
   - name: water-changes
+  - name: dosing
 
 paths:
   /healthz:
@@ -429,8 +430,9 @@ paths:
       summary: Archive a tank (owner; terminal, idempotent)
       description: |
         Archived tanks stay readable but can no longer change. Records `tank.archived` on the
-        timeline. Water-change schedules end, upcoming occurrences are removed and changes still
-        open (including overdue ones) are resolved as skipped with reason code `tank_archived`.
+        timeline. Water-change schedules end and dosing plans complete, upcoming occurrences are
+        removed, and water changes still open (including overdue ones) and still-scheduled doses
+        are resolved as skipped with reason code `tank_archived`; missed doses stay missed.
       parameters: [{ $ref: "#/components/parameters/CSRF" }]
       responses:
         "200":
@@ -744,6 +746,335 @@ paths:
         "422": { $ref: "#/components/responses/Unprocessable" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
+  /api/v1/dosing-products:
+    get:
+      tags: [dosing]
+      summary: The curated catalog and the caller's own products
+      responses:
+        "200":
+          description: Curated products first, then the caller's (never paginated).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/DosingProduct" } }
+                  next_cursor: { type: "null" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [dosing]
+      summary: Create a private product (at most 200)
+      description: No concentration is stored or inferred; ReefCare records amounts only.
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, form, default_unit]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 100 }
+                brand: { type: [string, "null"], maxLength: 100 }
+                form: { $ref: "#/components/schemas/DosingForm" }
+                default_unit: { $ref: "#/components/schemas/DoseUnit" }
+                notes: { type: [string, "null"], maxLength: 2000 }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DosingProduct" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409":
+          description: "`limit_reached`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/tanks/{tankID}/dosing-plans:
+    parameters: [{ $ref: "#/components/parameters/TankID" }]
+    get:
+      tags: [dosing]
+      summary: List the tank's dosing plans (owner or viewer)
+      responses:
+        "200":
+          description: All plans, oldest first (never paginated).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/DosingPlan" } }
+                  next_cursor: { type: "null" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [dosing]
+      summary: Create a recurring dosing plan (owner)
+      description: Occurrences are created 7 days ahead at once and kept ahead by an hourly job.
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DosingPlanCreate" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DosingPlan" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`tank_archived`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "`validation_failed`; field codes include `product_not_found`, `incompatible_unit`, `invalid_rrule`, `unsupported_rrule_part`, `before_start`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/dosing-plans/{planID}:
+    parameters: [{ $ref: "#/components/parameters/DosingPlanID" }]
+    patch:
+      tags: [dosing]
+      summary: Edit a plan (owner, merge patch, `version` required)
+      description: Changes to amount, unit or timing replace upcoming occurrences nobody acted on; missed and resolved doses stay.
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DosingPlanPatch" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DosingPlan" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`version_conflict`, `plan_completed` or `tank_archived`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/dosing-plans/{planID}/pause:
+    parameters: [{ $ref: "#/components/parameters/DosingPlanID" }]
+    post:
+      tags: [dosing]
+      summary: Pause a plan (upcoming occurrences are removed; idempotent)
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      responses:
+        "200":
+          description: The plan.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DosingPlan" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`plan_completed` or `tank_archived`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/dosing-plans/{planID}/resume:
+    parameters: [{ $ref: "#/components/parameters/DosingPlanID" }]
+    post:
+      tags: [dosing]
+      summary: Resume a paused plan (occurrences are created again from now; idempotent)
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      responses:
+        "200":
+          description: The plan.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DosingPlan" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`plan_completed` or `tank_archived`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/dosing-plans/{planID}/complete:
+    parameters: [{ $ref: "#/components/parameters/DosingPlanID" }]
+    post:
+      tags: [dosing]
+      summary: Complete a plan for good (upcoming occurrences are removed; terminal)
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      responses:
+        "200":
+          description: The plan.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DosingPlan" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`plan_completed` or `tank_archived`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/tanks/{tankID}/dosing-history:
+    parameters: [{ $ref: "#/components/parameters/TankID" }]
+    get:
+      tags: [dosing]
+      summary: Dose events, newest event time first (owner or viewer)
+      description: Event time is `executed_at` when dosed, else `scheduled_for`.
+      parameters:
+        - name: status
+          in: query
+          description: Comma-separated subset of `scheduled`, `completed`, `partial`, `skipped`, `failed`, `missed`, `unconfirmed`. Default all.
+          schema: { type: string, example: "missed,scheduled" }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - { $ref: "#/components/parameters/Limit" }
+        - { $ref: "#/components/parameters/Cursor" }
+      responses:
+        "200":
+          description: A page of dose events.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/DoseEvent" } }
+                  next_cursor: { type: [string, "null"] }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/tanks/{tankID}/dosing-events:
+    parameters: [{ $ref: "#/components/parameters/TankID" }]
+    post:
+      tags: [dosing]
+      summary: Record a dose given without a plan (owner; idempotent with Idempotency-Key)
+      description: |
+        With `Idempotency-Key`, a retry returns the first dose (header `Idempotent-Replayed: true`)
+        instead of creating a duplicate; the same key with a different request is 422
+        `idempotency_key_reused`. Adds `dosing.completed` to the timeline.
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - name: Idempotency-Key
+          in: header
+          schema: { type: string, minLength: 8, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [product_id, amount, amount_unit]
+              properties:
+                product_id: { type: string, format: uuid }
+                amount: { $ref: "#/components/schemas/Decimal" }
+                amount_unit: { $ref: "#/components/schemas/DoseUnit" }
+                executed_at: { type: string, format: date-time, description: Default now; not in the future. }
+                notes: { type: [string, "null"], maxLength: 2000 }
+      responses:
+        "201":
+          description: Recorded (or replayed).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DoseEvent" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`tank_archived`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "`validation_failed` or `idempotency_key_reused`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/dosing-events/{eventID}/resolve:
+    parameters:
+      - name: eventID
+        in: path
+        required: true
+        description: A malformed ID is answered like an unknown one (404).
+        schema: { type: string, format: uuid }
+    post:
+      tags: [dosing]
+      summary: Record what happened to a scheduled, missed or unconfirmed dose (owner, idempotent)
+      description: |
+        - `completed`: the planned amount was given (`actual_amount` defaults to it, stored with
+          `actual_source: planned_default`); less is `partial` (`use_partial`); more than 1.5× the
+          planned amount needs `confirm_over_planned: true` (`confirm_over_planned`).
+        - `partial`: `actual_amount` required and less than planned.
+        - `skipped` / `failed`: `reason` required; `failed` may record the amount that went in.
+        - A missed or unconfirmed dose resolved as given needs an explicit `executed_at`
+          (`required_for_late_dose`): was it given on time and not logged, or late? Never
+          defaulted to now. `executed_at` may not be more than a day before the scheduled time.
+        Repeating the same outcome returns 200; a different one 409 `already_resolved`. Adds
+        `dosing.<status>` to the timeline; resolving a missed/unconfirmed dose carries
+        `previous_status` and `corrected_at` in its summary.
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [status]
+              properties:
+                status: { enum: [completed, partial, skipped, failed] }
+                actual_amount: { $ref: "#/components/schemas/Decimal" }
+                executed_at: { type: string, format: date-time, description: "completed/partial only; default now unless the dose is missed/unconfirmed." }
+                confirm_over_planned: { type: boolean, default: false }
+                reason: { type: [string, "null"], maxLength: 500 }
+                notes: { type: [string, "null"], maxLength: 2000 }
+      responses:
+        "200":
+          description: Resolved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DoseEvent" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`already_resolved` or `tank_archived`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
 security:
   - session: []
 
@@ -764,6 +1095,12 @@ components:
       schema: { type: string }
     TankID:
       name: tankID
+      in: path
+      required: true
+      description: A malformed ID is answered like an unknown one (404).
+      schema: { type: string, format: uuid }
+    DosingPlanID:
+      name: planID
       in: path
       required: true
       description: A malformed ID is answered like an unknown one (404).
@@ -1195,3 +1532,112 @@ components:
         planned_volume_l: { $ref: "#/components/schemas/Decimal" }
         salt_mix: { type: [string, "null"], maxLength: 100 }
         notes: { type: [string, "null"], maxLength: 2000 }
+    DoseUnit:
+      enum: [ml, l, drops, g, mg, tablets]
+      description: "Must suit the product form: liquid ml/l/drops, powder g/mg or ml/l (dissolved, \"prepared solution\"), tablet tablets, other any (`incompatible_unit`). Units are never converted into each other; drop size varies by bottle."
+    DosingForm:
+      enum: [liquid, powder, tablet, other]
+    DosingProduct:
+      type: object
+      required: [id, curated, name, brand, form, default_unit, notes, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        curated: { type: boolean, description: Catalog entry (true) or the caller's own product. }
+        name: { type: string }
+        brand: { type: [string, "null"] }
+        form: { $ref: "#/components/schemas/DosingForm" }
+        default_unit: { $ref: "#/components/schemas/DoseUnit" }
+        notes: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+    DosingProductRef:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        brand: { type: [string, "null"] }
+        form: { $ref: "#/components/schemas/DosingForm" }
+    DosingPlan:
+      type: object
+      required: [id, tank_id, product, amount, amount_unit, rrule, timezone, starts_on, ends_on, delivery_method,
+                 status, notes, next_occurrences, created_at, updated_at, version]
+      properties:
+        id: { type: string, format: uuid }
+        tank_id: { type: string, format: uuid }
+        product: { $ref: "#/components/schemas/DosingProductRef" }
+        amount: { $ref: "#/components/schemas/Decimal" }
+        amount_unit: { $ref: "#/components/schemas/DoseUnit" }
+        rrule: { $ref: "#/components/schemas/RRule" }
+        timezone: { type: string }
+        starts_on: { type: string, format: date }
+        ends_on: { type: [string, "null"], format: date }
+        delivery_method: { enum: [manual, dosing_pump], description: Recorded only; ReefCare never controls a pump. }
+        status: { enum: [active, paused, completed] }
+        notes: { type: [string, "null"] }
+        next_occurrences: { type: array, maxItems: 3, items: { type: string, format: date-time } }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        version: { type: integer }
+    DosingPlanCreate:
+      type: object
+      additionalProperties: false
+      required: [product_id, amount, amount_unit, rrule, timezone, starts_on]
+      properties:
+        product_id: { type: string, format: uuid, description: A curated product or one of the owner's own (`product_not_found`). }
+        amount: { $ref: "#/components/schemas/Decimal" }
+        amount_unit: { $ref: "#/components/schemas/DoseUnit" }
+        rrule: { $ref: "#/components/schemas/RRule" }
+        timezone: { type: string }
+        starts_on: { type: string, format: date, description: "2000-01-01 to ten years ahead" }
+        ends_on: { type: [string, "null"], format: date }
+        delivery_method: { enum: [manual, dosing_pump], default: manual }
+        notes: { type: [string, "null"], maxLength: 2000 }
+    DosingPlanPatch:
+      type: object
+      additionalProperties: false
+      required: [version]
+      properties:
+        version: { type: integer }
+        amount: { $ref: "#/components/schemas/Decimal" }
+        amount_unit: { $ref: "#/components/schemas/DoseUnit" }
+        rrule: { $ref: "#/components/schemas/RRule" }
+        timezone: { type: string }
+        starts_on: { type: string, format: date }
+        ends_on: { type: [string, "null"], format: date }
+        delivery_method: { enum: [manual, dosing_pump] }
+        notes: { type: [string, "null"], maxLength: 2000 }
+    DoseEvent:
+      type: object
+      required: [id, tank_id, plan_id, product, scheduled_for, planned_amount, actual_amount, actual_source, deviation,
+                 amount_unit, status, executed_at, reason, reason_code, notes, reported_by, missed_at, resolved_at,
+                 created_at, updated_at, version]
+      properties:
+        id: { type: string, format: uuid }
+        tank_id: { type: string, format: uuid }
+        plan_id: { type: [string, "null"], format: uuid }
+        product: { $ref: "#/components/schemas/DosingProductRef" }
+        scheduled_for: { type: [string, "null"], format: date-time }
+        planned_amount:
+          oneOf:
+            - { $ref: "#/components/schemas/Decimal" }
+            - { type: "null" }
+        actual_amount:
+          oneOf:
+            - { $ref: "#/components/schemas/Decimal" }
+            - { type: "null" }
+        actual_source: { enum: [entered, planned_default, null] }
+        deviation: { enum: [over, under, null], description: actual vs planned amount. }
+        amount_unit: { $ref: "#/components/schemas/DoseUnit" }
+        status:
+          enum: [scheduled, completed, partial, skipped, failed, missed, unconfirmed]
+          description: "Set only by the scheduler when still scheduled after min(12 h, half the plan's spacing): `missed` for manual plans, `unconfirmed` for pump plans (ReefCare cannot know whether the pump delivered). Never auto-completed."
+        executed_at: { type: [string, "null"], format: date-time }
+        reason: { type: [string, "null"], description: "The keeper's words." }
+        reason_code: { enum: [tank_archived, plan_paused, plan_changed, null], description: System reason. }
+        notes: { type: [string, "null"] }
+        reported_by: { enum: [manual, device, null] }
+        missed_at: { type: [string, "null"], format: date-time, description: Set when the scheduler marked it missed; kept after a later resolution. }
+        resolved_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        version: { type: integer }
