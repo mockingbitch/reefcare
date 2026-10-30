@@ -44,6 +44,10 @@ export function errorMessage(e: ApiError): string {
 			return m.err_already_resolved();
 		case 'schedule_ended':
 			return m.err_schedule_ended();
+		case 'plan_completed':
+			return m.err_plan_completed();
+		case 'idempotency_key_reused':
+			return m.err_idempotency_key_reused();
 		case 'already_verified':
 			return m.err_already_verified();
 		case 'validation_failed':
@@ -117,6 +121,22 @@ export function fieldMessage(d: ErrorDetail): string {
 			return m.f_before_start();
 		case 'in_future':
 			return m.f_in_future();
+		case 'product_not_found':
+			return m.f_product_not_found();
+		case 'incompatible_unit':
+			return m.f_incompatible_unit();
+		case 'confirm_over_planned':
+			return m.f_confirm_over_planned({ planned: p.planned ?? '' });
+		case 'use_partial':
+			return m.f_use_partial({ planned: p.planned ?? '' });
+		case 'not_less_than_planned':
+			return m.f_not_less_than_planned({ planned: p.planned ?? '' });
+		case 'required_for_late_dose':
+			return m.f_required_for_late_dose();
+		case 'before_scheduled':
+			return m.f_before_scheduled();
+		case 'not_allowed':
+			return m.f_not_allowed();
 		default:
 			return m.f_invalid();
 	}

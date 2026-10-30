@@ -16,6 +16,13 @@ export type WaterChangeSchedulePatch = Schemas['WaterChangeSchedulePatch'];
 export type WaterChangeRecord = Schemas['WaterChangeRecord'];
 export type WaterChangeEstimate = Schemas['WaterChangeEstimate'];
 export type RecurrencePreview = { rrule: string; next_occurrences: string[] };
+export type DosingProduct = Schemas['DosingProduct'];
+export type DosingPlan = Schemas['DosingPlan'];
+export type DosingPlanCreate = Schemas['DosingPlanCreate'];
+export type DosingPlanPatch = Schemas['DosingPlanPatch'];
+export type DoseEvent = Schemas['DoseEvent'];
+export type DoseUnit = Schemas['DoseUnit'];
+export type DosingForm = Schemas['DosingForm'];
 export type Page<T> = { items: T[]; next_cursor: string | null };
 
 export type ErrorDetail = { field?: string; code: string; params?: Record<string, string> };
@@ -55,9 +62,10 @@ export async function api<T>(
 	method: Method,
 	path: string,
 	body?: unknown,
-	fetchFn: typeof fetch = fetch
+	fetchFn: typeof fetch = fetch,
+	extraHeaders: Record<string, string> = {}
 ): Promise<Result<T>> {
-	const headers: Record<string, string> = { Accept: 'application/json' };
+	const headers: Record<string, string> = { Accept: 'application/json', ...extraHeaders };
 	if (body !== undefined) headers['Content-Type'] = 'application/json';
 	if (unsafe.has(method)) {
 		const token = csrfToken();

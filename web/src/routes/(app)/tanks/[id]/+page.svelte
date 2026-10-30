@@ -146,6 +146,9 @@
 					>{m.tank_section_water_changes()}</a
 				>
 			</li>
+			<li>
+				<a href={resolve('/(app)/tanks/[id]/dosing', { id: tank.id })}>{m.tank_section_dosing()}</a>
+			</li>
 		</ul>
 	</nav>
 

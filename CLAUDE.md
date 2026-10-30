@@ -49,8 +49,10 @@ Designer. Detailed, path-scoped rules live in `.claude/rules/` and load automati
   batched email, per-category prefs). 2.10 web screens in progress: water changes done
   (`web/src/routes/(app)/tanks/[id]/water-changes/`, `#lib/recurrence.js`, schedule previews via
   `GET /recurrence/preview` in `internal/scheduling` — never reimplement recurrence in the web
-  app). Next in 2.10: dosing, equipment & maintenance, livestock, notifications, tank dashboard;
-  2.1/2.2 once the D5 domain reviewer is named.
+  app). Dosing done (`web/src/routes/(app)/tanks/[id]/dosing/`, `/dosing/products`,
+  `#lib/dosing.js`; `api()` takes extra headers, e.g. `Idempotency-Key`). Next in 2.10:
+  equipment & maintenance, livestock, notifications, tank dashboard; 2.1/2.2 once the D5 domain
+  reviewer is named.
 - Unfinished work, known gaps and pending decisions are tracked in `docs/open-items.md`;
   update it when an item is completed or a new gap is found.
 - Go module path is `reefcare`. Migrations use sequential numbering (`make migration name=...`).

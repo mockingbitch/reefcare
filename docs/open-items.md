@@ -1,8 +1,8 @@
 # ReefCare — Open Items
 
-Last updated: 2026-10-30 · State: Phase 1 done; Phase 2 backend done except 2.1/2.2 (waiting
-on D5): 2.3–2.9 committed on branch `phase-1-foundation` (latest 25400b1). 2.10 web in progress:
-water-change screens done (uncommitted); dosing, equipment, livestock, notifications and the
+Last updated: 2026-10-31 · State: Phase 1 done; Phase 2 backend done except 2.1/2.2 (waiting
+on D5): 2.3–2.9 committed on branch `phase-1-foundation`. 2.10 web in progress: water-change
+screens committed (2dc0b29); dosing screens done; equipment, livestock, notifications and the
 tank dashboard remain.
 
 Everything below is known to be **not done**, **partially done**, or **waiting on a decision**.
@@ -66,7 +66,7 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 | W5 | Dilution projection after n changes (docs/domain-model.md, with its caveats) | P3 | Needs measured new-water values (2.2), exact decimal powers, a batch/continuous `method` field, and D5 review |
 | W6 | Remaining UI requirement from the domain review | P2 | Done in 2.10: capped month day note, next 3 dates before saving (server preview), schedule cards use `next_occurrences`, "< 0.1 %", calm overdue wording. **Open:** optional prompt to record new-water salinity and temperature on completion (needs 2.2 / W1) |
 | W10 | Schedules with several times a day or several month days can't be edited in the form | P3 | The form edits one time and one month day; such rules (created through the API) show read-only with a note, and volume/notes/status stay editable |
-| W11 | "Upcoming" shows the 5 soonest of the newest 50 scheduled changes | P3 | The list endpoint is newest-first; with more than 50 materialized occurrences (e.g. several daily schedules) the soonest could be missed. Add `order=asc` or a `to` window if that happens |
+| W11 | ~~"Upcoming" could miss the soonest changes~~ | done | The list now asks for the next 14 days only (dosing: next 48 h), so a newest-first page can no longer push the soonest items out |
 | W7 | "Skip all overdue" with one reason | P3 | Several missed weekly changes otherwise need one skip each |
 | W8 | Ordinal weekdays (`BYDAY=1SA`, "first Saturday") and "last day of month" | P3 | Rejected today with `invalid_rrule`; common enough to add with `BYSETPOS` |
 | W9 | Gallon input | P3 | Volumes are litres only. If gallons are accepted, store the original value and unit and convert explicitly (US 3.785411784 L, Imperial 4.54609 L — never guess which) |
@@ -79,7 +79,10 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 | DS2 | Target parameters on plans (e.g. alkalinity) | P2 | Needs the parameter catalog (2.1, D5) |
 | DS3 | Curated product catalog seed | P2 | Seed data in `db/seed/` must be reviewed by the D5 domain expert; until then only private products exist |
 | DS4 | Device-reported doses (pump integrations) | P3 | `reported_by = 'device'` is reserved; ingestion must be idempotent per device event id. ReefCare never controls a pump |
-| DS5 | Web screens for products, plans and history | P2 | Milestone 2.10. Domain-review requirements: one-tap "Dosed {planned} {unit} of {product}?" (never auto-confirm, never "mark all done"); "When did you dose this?" for late doses (at the scheduled time / just now); warn when a late dose falls near the next one or another dose of the same product; confirm ad-hoc doses > ~3× the plan or in an unusual unit (heuristic); wording "Missed doses are not made up automatically…" (expert guidance, not established fact); drop-size hint for `drops`; "ReefCare does not know whether your pump delivered this dose" for unconfirmed |
+| DS5 | ~~Web screens for products, plans and history~~ | done | `web/src/routes/(app)/tanks/[id]/dosing/` and `/dosing/products`. Domain-review requirements implemented and re-reviewed by reef-domain-expert (2026-10-31): per-dose dialog (no "mark all"); late doses start with no outcome and need "when"; one-tap confirm only for doses due within 6 h ("Record early…" with a warning otherwise); a failed/partial dose never defaults to the planned amount; same-product proximity hint over half the plan spacing (≥ 6 h, off for plans dosing more often than every 4 h; never-given doses ignored); ad-hoc check at > 3× the largest plan (pump plans: daily total) or an unusual unit; powder-as-solution and drop-size hints. Ad-hoc doses send an `Idempotency-Key`. e2e `web/e2e/dosing.e2e.ts` with axe |
+| DS10 | No end-to-end test of resolving a missed or unconfirmed dose | P3 | Needs the scheduler to mark a dose missed (time travel); helpers are unit-tested. Add an API test hook or a seeded missed dose for e2e |
+| DS11 | Products without an active plan get no ad-hoc sanity check | P3 | The > 3× / unit check needs a plan to compare with. Consider a per-product "typical dose" later |
+| DS12 | Hint to keep alkalinity and calcium additions apart in time or place | P3 | Common practice to avoid precipitation (domain review); not a DS5 requirement. Needs product categories |
 | DS6 | Pump plans as a daily total | P3 | Micro-dosing pumps run 24–48+ times a day; today each occurrence becomes `unconfirmed`. Consider one occurrence per day (daily total) for `dosing_pump` plans |
 | DS7 | Count-style units (scoop, capful, ampoule) and a "prepared solution" product linked to its dry product | P3 | Never treated as mass or volume; no derived concentration |
 | DS8 | `reason_code` for water changes | P3 | Water changes still store the archive skip as `skip_reason = 'tank_archived'` (free text); dosing uses a separate `reason_code` column |

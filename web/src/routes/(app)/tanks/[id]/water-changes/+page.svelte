@@ -47,7 +47,12 @@
 			api<Tank>('GET', base),
 			api<Page<WaterChangeSchedule>>('GET', `${base}/water-change-schedules`),
 			api<Page<WaterChange>>('GET', `${base}/water-changes?status=overdue&limit=50`),
-			api<Page<WaterChange>>('GET', `${base}/water-changes?status=scheduled&limit=50`),
+			// The next 14 days only: the list is newest first, so a wide window could push the
+			// soonest changes out of the page.
+			api<Page<WaterChange>>(
+				'GET',
+				`${base}/water-changes?status=scheduled&limit=50&to=${encodeURIComponent(new Date(Date.now() + 14 * 86_400_000).toISOString())}`
+			),
 			api<Page<WaterChange>>('GET', `${base}/water-changes?status=completed,skipped&limit=20`)
 		]);
 		loading = false;
