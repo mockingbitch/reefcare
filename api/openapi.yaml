@@ -1688,6 +1688,42 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "422": { $ref: "#/components/responses/Unprocessable" }
 
+  /api/v1/tanks/{tankID}/timeline:
+    parameters: [{ $ref: "#/components/parameters/TankID" }]
+    get:
+      tags: [tanks]
+      summary: The tank's unified timeline, newest first (owner or viewer)
+      description: |
+        Everything recorded on the tank (tank changes, dosing, water changes, equipment,
+        maintenance, livestock…) at the time it happened (`occurred_at`), not when it was
+        entered. `summary` holds render-ready parameters; clients localize by `event_type` and
+        should show unknown types generically. Render times in the user's time zone.
+      parameters:
+        - name: category
+          in: query
+          description: Comma-separated or repeated; an unknown category is 400 `invalid_query` (`unsupported`).
+          schema: { type: array, items: { $ref: "#/components/schemas/TimelineCategory" } }
+          style: form
+          explode: false
+        - { name: from, in: query, description: Inclusive (RFC 3339)., schema: { type: string, format: date-time } }
+        - { name: to, in: query, description: "Exclusive (RFC 3339); not before `from` (400 `before_from`).", schema: { type: string, format: date-time } }
+        - { $ref: "#/components/parameters/Limit" }
+        - { $ref: "#/components/parameters/Cursor" }
+      responses:
+        "200":
+          description: A page of events.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/TimelineEvent" } }
+                  next_cursor: { type: [string, "null"] }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
 security:
   - session: []
 
@@ -2531,3 +2567,30 @@ components:
         occurred_at: { type: string, format: date-time }
         note: { type: [string, "null"] }
         created_at: { type: string, format: date-time }
+    TimelineCategory:
+      enum: [measurement, dosing, water_change, equipment, maintenance, livestock, symptom, treatment, milestone, note, assessment]
+    TimelineEvent:
+      type: object
+      required: [id, occurred_at, category, event_type, source, actor, summary]
+      properties:
+        id: { type: string, format: uuid }
+        occurred_at: { type: string, format: date-time }
+        category: { $ref: "#/components/schemas/TimelineCategory" }
+        event_type: { type: string, example: "livestock.died", description: "`<module>.<what>`; new types may appear." }
+        source:
+          type: object
+          required: [type, id]
+          description: The record that caused the event (e.g. `livestock_event`, `water_change_event`).
+          properties:
+            type: { type: string }
+            id: { type: string, format: uuid }
+        actor:
+          description: Who recorded it; null for the system (scheduled jobs).
+          oneOf:
+            - type: object
+              required: [id, display_name]
+              properties:
+                id: { type: string, format: uuid }
+                display_name: { type: string }
+            - { type: "null" }
+        summary: { type: object, additionalProperties: true }

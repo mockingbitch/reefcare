@@ -1,6 +1,7 @@
 package tanks
 
 import (
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -44,6 +45,7 @@ func (h *Handler) Mount(r chi.Router, subs ...func(chi.Router)) {
 			r.Get("/shares", h.listShares)
 			r.Post("/shares", h.grant)
 			r.Delete("/shares/{userID}", h.revoke)
+			r.Get("/timeline", h.timeline)
 			for _, sub := range subs {
 				sub(r)
 			}
@@ -333,4 +335,81 @@ func (h *Handler) revoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+type timelineResponse struct {
+	ID         uuid.UUID       `json:"id"`
+	OccurredAt time.Time       `json:"occurred_at"`
+	Category   string          `json:"category"`
+	EventType  string          `json:"event_type"`
+	Source     timelineSource  `json:"source"`
+	Actor      *timelineActor  `json:"actor"`
+	Summary    json.RawMessage `json:"summary"`
+}
+
+type timelineSource struct {
+	Type string    `json:"type"`
+	ID   uuid.UUID `json:"id"`
+}
+
+type timelineActor struct {
+	ID          uuid.UUID `json:"id"`
+	DisplayName string    `json:"display_name"`
+}
+
+func (h *Handler) timeline(w http.ResponseWriter, r *http.Request) {
+	id, err := PathID(r, "tankID")
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	page, err := httpserver.ParsePageParams[TimelineCursor](r)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	qs := r.URL.Query()
+	f := TimelineFilter{Limit: page.FetchLimit(), Cursor: page.Cursor}
+	for _, v := range qs["category"] { // ?category=dosing,livestock or repeated
+		for _, c := range strings.Split(v, ",") {
+			if c = strings.TrimSpace(c); c != "" {
+				f.Categories = append(f.Categories, c)
+			}
+		}
+	}
+	for _, b := range []struct {
+		name string
+		dst  *time.Time
+	}{{"from", &f.From}, {"to", &f.To}} {
+		if v := qs.Get(b.name); v != "" {
+			t, err := time.Parse(time.RFC3339, v)
+			if err != nil {
+				h.fail(w, r, apperr.BadRequest("invalid_query", "Invalid time range.",
+					apperr.FieldError{Field: b.name, Code: "invalid_datetime", Params: map[string]string{"format": "RFC 3339"}}))
+				return
+			}
+			*b.dst = t
+		}
+	}
+	events, err := h.svc.Timeline(r.Context(), actor(r), id, f)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	items := make([]timelineResponse, len(events))
+	for i, e := range events {
+		items[i] = timelineResponse{
+			ID: e.ID, OccurredAt: e.OccurredAt.UTC(), Category: e.Category, EventType: e.EventType,
+			Source: timelineSource{Type: e.SourceType, ID: e.SourceID}, Summary: e.Summary,
+		}
+		if e.ActorID != nil && e.ActorName != nil {
+			items[i].Actor = &timelineActor{ID: *e.ActorID, DisplayName: *e.ActorName}
+		}
+	}
+	out, err := httpserver.NewPage(items, page.Limit, func(e timelineResponse) any { return TimelineCursor{At: e.OccurredAt, ID: e.ID} })
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	httpserver.WriteJSON(w, r, http.StatusOK, out)
 }

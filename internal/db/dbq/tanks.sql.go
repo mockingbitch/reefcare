@@ -7,6 +7,7 @@ package dbq
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -366,6 +367,162 @@ func (q *Queries) InsertTankEvent(ctx context.Context, arg InsertTankEventParams
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const listTankEvents = `-- name: ListTankEvents :many
+SELECT e.id, e.occurred_at, e.category, e.event_type, e.source_type, e.source_id, e.actor_id, u.display_name AS actor_name,
+       e.summary
+FROM tank_events e
+LEFT JOIN users u ON u.id = e.actor_id
+WHERE e.tank_id = $1
+  AND e.occurred_at >= $2::timestamptz
+  AND (e.occurred_at, e.id) < ($3::timestamptz, $4::uuid)
+ORDER BY e.occurred_at DESC, e.id DESC
+LIMIT $5
+`
+
+type ListTankEventsParams struct {
+	TankID   uuid.UUID
+	FromAt   time.Time
+	CursorAt time.Time
+	CursorID uuid.UUID
+	RowLimit int32
+}
+
+type ListTankEventsRow struct {
+	ID         uuid.UUID
+	OccurredAt time.Time
+	Category   string
+	EventType  string
+	SourceType string
+	SourceID   uuid.UUID
+	ActorID    *uuid.UUID
+	ActorName  *string
+	Summary    json.RawMessage
+}
+
+// The tank's timeline, newest first: keyset on (occurred_at, id) from the cursor down to
+// from_at. The service folds the exclusive "to" bound into the cursor as (to, uuid.Nil): a
+// separate occurred_at < to condition would become the btree start key and make deep pages
+// walk down from the newest event. Bounds are always concrete values (no "IS NULL OR"), so
+// generic plans use tank_events_feed too. Only called after Authorizer allowed the caller.
+func (q *Queries) ListTankEvents(ctx context.Context, arg ListTankEventsParams) ([]ListTankEventsRow, error) {
+	rows, err := q.db.Query(ctx, listTankEvents,
+		arg.TankID,
+		arg.FromAt,
+		arg.CursorAt,
+		arg.CursorID,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTankEventsRow{}
+	for rows.Next() {
+		var i ListTankEventsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OccurredAt,
+			&i.Category,
+			&i.EventType,
+			&i.SourceType,
+			&i.SourceID,
+			&i.ActorID,
+			&i.ActorName,
+			&i.Summary,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTankEventsByCategory = `-- name: ListTankEventsByCategory :many
+SELECT e.id, e.occurred_at, e.category, e.event_type, e.source_type, e.source_id, e.actor_id, u.display_name AS actor_name,
+       e.summary
+FROM (
+    SELECT x.id, x.occurred_at, x.category, x.event_type, x.source_type, x.source_id, x.actor_id, x.summary
+    FROM unnest($1::text[]) AS c (cat)
+    CROSS JOIN LATERAL (
+        SELECT t.id, t.occurred_at, t.category, t.event_type, t.source_type, t.source_id, t.actor_id, t.summary
+        FROM tank_events t
+        WHERE t.tank_id = $2::uuid AND t.category = c.cat
+          AND t.occurred_at >= $3::timestamptz
+          AND (t.occurred_at, t.id) < ($4::timestamptz, $5::uuid)
+        ORDER BY t.occurred_at DESC, t.id DESC
+        LIMIT $6::integer
+    ) x
+    ORDER BY x.occurred_at DESC, x.id DESC
+    LIMIT $6::integer
+) e
+LEFT JOIN users u ON u.id = e.actor_id
+ORDER BY e.occurred_at DESC, e.id DESC
+`
+
+type ListTankEventsByCategoryParams struct {
+	Categories []string
+	TankID     uuid.UUID
+	FromAt     time.Time
+	CursorAt   time.Time
+	CursorID   uuid.UUID
+	RowLimit   int32
+}
+
+type ListTankEventsByCategoryRow struct {
+	ID         uuid.UUID
+	OccurredAt time.Time
+	Category   string
+	EventType  string
+	SourceType string
+	SourceID   uuid.UUID
+	ActorID    *uuid.UUID
+	ActorName  *string
+	Summary    json.RawMessage
+}
+
+// ListTankEvents restricted to some categories: one ordered, LIMITed scan of
+// tank_events_cat per category, merged. A plain "category = ANY(...)" sorts every match or,
+// under a generic plan, filter-scans the whole tank. The actor join runs after the LIMIT.
+func (q *Queries) ListTankEventsByCategory(ctx context.Context, arg ListTankEventsByCategoryParams) ([]ListTankEventsByCategoryRow, error) {
+	rows, err := q.db.Query(ctx, listTankEventsByCategory,
+		arg.Categories,
+		arg.TankID,
+		arg.FromAt,
+		arg.CursorAt,
+		arg.CursorID,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTankEventsByCategoryRow{}
+	for rows.Next() {
+		var i ListTankEventsByCategoryRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OccurredAt,
+			&i.Category,
+			&i.EventType,
+			&i.SourceType,
+			&i.SourceID,
+			&i.ActorID,
+			&i.ActorName,
+			&i.Summary,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listTankShares = `-- name: ListTankShares :many

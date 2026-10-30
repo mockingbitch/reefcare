@@ -137,6 +137,46 @@ VALUES (@tank_id, @occurred_at, @category, @event_type, @source_type, @source_id
         COALESCE(sqlc.narg(summary)::jsonb, '{}'), @now)
 ON CONFLICT (source_type, source_id, event_type) DO NOTHING;
 
+-- name: ListTankEvents :many
+-- The tank's timeline, newest first: keyset on (occurred_at, id) from the cursor down to
+-- from_at. The service folds the exclusive "to" bound into the cursor as (to, uuid.Nil): a
+-- separate occurred_at < to condition would become the btree start key and make deep pages
+-- walk down from the newest event. Bounds are always concrete values (no "IS NULL OR"), so
+-- generic plans use tank_events_feed too. Only called after Authorizer allowed the caller.
+SELECT e.id, e.occurred_at, e.category, e.event_type, e.source_type, e.source_id, e.actor_id, u.display_name AS actor_name,
+       e.summary
+FROM tank_events e
+LEFT JOIN users u ON u.id = e.actor_id
+WHERE e.tank_id = @tank_id
+  AND e.occurred_at >= sqlc.arg(from_at)::timestamptz
+  AND (e.occurred_at, e.id) < (sqlc.arg(cursor_at)::timestamptz, sqlc.arg(cursor_id)::uuid)
+ORDER BY e.occurred_at DESC, e.id DESC
+LIMIT @row_limit;
+
+-- name: ListTankEventsByCategory :many
+-- ListTankEvents restricted to some categories: one ordered, LIMITed scan of
+-- tank_events_cat per category, merged. A plain "category = ANY(...)" sorts every match or,
+-- under a generic plan, filter-scans the whole tank. The actor join runs after the LIMIT.
+SELECT e.id, e.occurred_at, e.category, e.event_type, e.source_type, e.source_id, e.actor_id, u.display_name AS actor_name,
+       e.summary
+FROM (
+    SELECT x.id, x.occurred_at, x.category, x.event_type, x.source_type, x.source_id, x.actor_id, x.summary
+    FROM unnest(sqlc.arg(categories)::text[]) AS c (cat)
+    CROSS JOIN LATERAL (
+        SELECT t.id, t.occurred_at, t.category, t.event_type, t.source_type, t.source_id, t.actor_id, t.summary
+        FROM tank_events t
+        WHERE t.tank_id = sqlc.arg(tank_id)::uuid AND t.category = c.cat
+          AND t.occurred_at >= sqlc.arg(from_at)::timestamptz
+          AND (t.occurred_at, t.id) < (sqlc.arg(cursor_at)::timestamptz, sqlc.arg(cursor_id)::uuid)
+        ORDER BY t.occurred_at DESC, t.id DESC
+        LIMIT sqlc.arg(row_limit)::integer
+    ) x
+    ORDER BY x.occurred_at DESC, x.id DESC
+    LIMIT sqlc.arg(row_limit)::integer
+) e
+LEFT JOIN users u ON u.id = e.actor_id
+ORDER BY e.occurred_at DESC, e.id DESC;
+
 -- name: LockTankRow :exec
 -- Taken first by workflows that change the tank row or check per-tank limits ("at most
 -- N shares"), so concurrent writers queue instead of deadlocking on a FOR SHARE upgrade.

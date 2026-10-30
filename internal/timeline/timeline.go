@@ -1,7 +1,8 @@
 // Package timeline records events on a tank's unified chronological timeline
 // (docs/domain-model.md, tank_events). Modules call Record inside the transaction that
 // changes the source data, so the event and its cause commit or roll back together.
-// The feed endpoint arrives with milestone 2.8.
+// The feed (GET /tanks/{tankID}/timeline) lives in package tanks, which owns tank
+// authorization.
 package timeline
 
 import (
@@ -29,6 +30,22 @@ const (
 	CategoryNote        = "note"
 	CategoryAssessment  = "assessment"
 )
+
+// Categories lists every category in display order.
+var Categories = []string{
+	CategoryMeasurement, CategoryDosing, CategoryWaterChange, CategoryEquipment, CategoryMaintenance,
+	CategoryLivestock, CategorySymptom, CategoryTreatment, CategoryMilestone, CategoryNote, CategoryAssessment,
+}
+
+// IsCategory reports whether c is a known category.
+func IsCategory(c string) bool {
+	for _, k := range Categories {
+		if k == c {
+			return true
+		}
+	}
+	return false
+}
 
 // Event is one timeline entry. (SourceType, SourceID, EventType) identifies the fact:
 // recording it again is a no-op, so retried workflows never duplicate events. SourceID

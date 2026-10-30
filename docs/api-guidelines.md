@@ -109,7 +109,7 @@ share), `[verified]` (verified email), `[mod]`, `[admin]`.
 A malformed `tankID` is answered like an unknown one (404). Viewers get 403 `forbidden` on
 writes; anyone else gets 404.
 | GET | `/api/v1/tanks/{tankID}/dashboard` | reader — latest readings, freshness, upcoming tasks, recent events (one round trip) |
-| GET | `/api/v1/tanks/{tankID}/timeline` | reader — `?category=dosing,livestock&from=&to=&cursor=` |
+| GET | `/api/v1/tanks/{tankID}/timeline` | reader — `?category=dosing,livestock&from=&to=&cursor=` (implemented 2.8) |
 
 ```jsonc
 // POST /api/v1/tanks
@@ -235,6 +235,13 @@ version is the current one. Both event creates honour `Idempotency-Key` (shared 
 - `GET/POST /tanks/{tankID}/livestock`, `GET/PATCH /livestock/{id}`,
   `GET/POST /livestock/{id}/events`, `POST /livestock/{id}/reconcile`
 - `GET /species?q=` (search curated + own)
+
+Timeline as implemented (2.8): newest first by `occurred_at` (when it happened), keyset
+cursor; `category` comma-separated or repeated (unknown → 400 `invalid_query`), `from` inclusive, `to`
+exclusive (RFC 3339). Each item: `event_type`, `category`, `source {type, id}`, `actor {id,
+display_name} | null` (null for the system), `summary` (render-ready params; clients localize
+by `event_type` and show unknown types generically). The feed is served by package `tanks`
+(it owns tank authorization; `timeline` only records).
 
 Livestock as implemented (2.7): `GET/POST /species` (`?q`, `?category`, `?limit`; create =
 private species). `POST /tanks/{id}/livestock` creates an entry with its `added` event and

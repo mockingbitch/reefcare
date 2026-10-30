@@ -3358,6 +3358,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tanks/{tankID}/timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                tankID: components["parameters"]["TankID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The tank's unified timeline, newest first (owner or viewer)
+         * @description Everything recorded on the tank (tank changes, dosing, water changes, equipment,
+         *     maintenance, livestock…) at the time it happened (`occurred_at`), not when it was
+         *     entered. `summary` holds render-ready parameters; clients localize by `event_type` and
+         *     should show unknown types generically. Render times in the user's time zone.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Comma-separated or repeated; an unknown category is 400 `invalid_query` (`unsupported`). */
+                    category?: components["schemas"]["TimelineCategory"][];
+                    /** @description Inclusive (RFC 3339). */
+                    from?: string;
+                    /** @description Exclusive (RFC 3339); not before `from` (400 `before_from`). */
+                    to?: string;
+                    limit?: components["parameters"]["Limit"];
+                    /** @description Opaque `next_cursor` from the previous page. */
+                    cursor?: components["parameters"]["Cursor"];
+                };
+                header?: never;
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    tankID: components["parameters"]["TankID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A page of events. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: components["schemas"]["TimelineEvent"][];
+                            next_cursor: string | null;
+                        };
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4123,6 +4187,35 @@ export interface components {
             note: string | null;
             /** Format: date-time */
             created_at: string;
+        };
+        /** @enum {unknown} */
+        TimelineCategory: "measurement" | "dosing" | "water_change" | "equipment" | "maintenance" | "livestock" | "symptom" | "treatment" | "milestone" | "note" | "assessment";
+        TimelineEvent: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            occurred_at: string;
+            category: components["schemas"]["TimelineCategory"];
+            /**
+             * @description `<module>.<what>`; new types may appear.
+             * @example livestock.died
+             */
+            event_type: string;
+            /** @description The record that caused the event (e.g. `livestock_event`, `water_change_event`). */
+            source: {
+                type: string;
+                /** Format: uuid */
+                id: string;
+            };
+            /** @description Who recorded it; null for the system (scheduled jobs). */
+            actor: {
+                /** Format: uuid */
+                id: string;
+                display_name: string;
+            } | null;
+            summary: {
+                [key: string]: unknown;
+            };
         };
     };
     responses: {

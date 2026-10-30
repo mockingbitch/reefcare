@@ -416,3 +416,123 @@ func TestTankLimitUnderConcurrency(t *testing.T) {
 		t.Fatalf("created=%d limited=%d, want exactly one create past 99", created, limited)
 	}
 }
+
+func TestTimeline(t *testing.T) {
+	e := apptest.New(t)
+	owner, _ := e.SignUp("lan@example.com", "Lan")
+	viewer, _ := e.SignUp("minh@example.com", "Minh")
+	stranger, _ := e.SignUp("eve@example.com", "Eve")
+	tank := create(t, owner, nano()).Body["id"].(string)
+	owner.Expect(owner.Do("POST", "/tanks/"+tank+"/shares", map[string]string{"email": "minh@example.com"}), http.StatusCreated, "")
+
+	// Events from several modules, entered out of order: the feed follows occurred_at.
+	owner.Expect(owner.Do("POST", "/tanks/"+tank+"/livestock", map[string]any{"display_name": "Clownfish", "category": "fish", "quantity": 2, "added_at": "2026-10-10T00:00:00Z"}), http.StatusCreated, "")
+	owner.Expect(owner.Do("POST", "/tanks/"+tank+"/equipment", map[string]any{"category": "heater", "name": "Heater", "installed_at": "2026-10-05T00:00:00Z"}), http.StatusCreated, "")
+	owner.Expect(owner.Do("POST", "/tanks/"+tank+"/maintenance-events", map[string]any{"title": "Cleaned glass", "performed_at": "2026-10-20T00:00:00Z"}), http.StatusCreated, "")
+
+	path := "/tanks/" + tank + "/timeline"
+	all := items(viewer.Expect(viewer.Do("GET", path, nil), http.StatusOK, ""))
+	var types []string
+	for _, it := range all {
+		types = append(types, it["event_type"].(string))
+	}
+	want := []string{"tank.created", "maintenance.performed", "livestock.added", "equipment.installed"}
+	if fmt.Sprint(types) != fmt.Sprint(want) {
+		t.Fatalf("feed = %v, want %v", types, want)
+	}
+	first := all[0]
+	if first["category"] != "milestone" || first["actor"].(map[string]any)["display_name"] != "Lan" || first["source"].(map[string]any)["type"] != "tank" {
+		t.Fatalf("event: %v", first)
+	}
+	if all[2]["summary"].(map[string]any)["name"] != "Clownfish" {
+		t.Fatalf("summary: %v", all[2])
+	}
+
+	// Filters.
+	for q, n := range map[string]int{
+		"?category=livestock":                                1,
+		"?category=livestock,equipment":                      2,
+		"?category=livestock&category=maintenance":           2,
+		"?from=2026-10-10T00:00:00Z":                         3,
+		"?to=2026-10-10T00:00:00Z":                           1,
+		"?from=2026-10-06T00:00:00Z&to=2026-10-21T00:00:00Z": 2,
+		"?category=dosing":                                   0,
+	} {
+		if got := len(items(owner.Expect(owner.Do("GET", path+q, nil), http.StatusOK, ""))); got != n {
+			t.Errorf("%s: %d events, want %d", q, got, n)
+		}
+	}
+	r := owner.Expect(owner.Do("GET", path+"?category=gossip", nil), http.StatusBadRequest, "invalid_query")
+	if r.FieldCodes()["category"] != "unsupported" {
+		t.Fatalf("%v", r.FieldCodes())
+	}
+	owner.Expect(owner.Do("GET", path+"?from=2026-10-20T00:00:00Z&to=2026-10-01T00:00:00Z", nil), http.StatusBadRequest, "invalid_query")
+	owner.Expect(owner.Do("GET", path+"?to=1960-01-01T00:00:00Z", nil), http.StatusOK, "")
+	owner.Expect(owner.Do("GET", path+"?from=yesterday", nil), http.StatusBadRequest, "invalid_query")
+	owner.Expect(owner.Do("GET", path+"?limit=0", nil), http.StatusBadRequest, "")
+	owner.Expect(owner.Do("GET", path+"?cursor=garbage", nil), http.StatusBadRequest, "")
+
+	// Pagination, also combined with a filter.
+	page := owner.Expect(owner.Do("GET", path+"?limit=3", nil), http.StatusOK, "")
+	cursor, _ := page.Body["next_cursor"].(string)
+	if len(items(page)) != 3 || cursor == "" {
+		t.Fatalf("page 1: %v", page.Body)
+	}
+	rest := owner.Expect(owner.Do("GET", path+"?limit=3&cursor="+cursor, nil), http.StatusOK, "")
+	if len(items(rest)) != 1 || items(rest)[0]["event_type"] != "equipment.installed" || rest.Body["next_cursor"] != nil {
+		t.Fatalf("page 2: %v", rest.Body)
+	}
+	p1 := owner.Expect(owner.Do("GET", path+"?limit=1&category=livestock,equipment", nil), http.StatusOK, "")
+	c1, _ := p1.Body["next_cursor"].(string)
+	p2 := items(owner.Expect(owner.Do("GET", path+"?limit=1&category=livestock,equipment&cursor="+c1, nil), http.StatusOK, ""))
+	if items(p1)[0]["event_type"] != "livestock.added" || len(p2) != 1 || p2[0]["event_type"] != "equipment.installed" {
+		t.Fatalf("filtered pages: %v / %v", items(p1), p2)
+	}
+
+	// Ties on occurred_at split across pages by id; a cursor keeps the time range.
+	for range 3 {
+		owner.Expect(owner.Do("POST", "/tanks/"+tank+"/maintenance-events", map[string]any{"title": "Water top-off", "performed_at": "2026-10-15T00:00:00Z"}), http.StatusCreated, "")
+	}
+	rng := path + "?from=2026-10-15T00:00:00Z&to=2026-10-16T00:00:00Z&limit=2"
+	pa := owner.Expect(owner.Do("GET", rng, nil), http.StatusOK, "")
+	ca, _ := pa.Body["next_cursor"].(string)
+	pb := owner.Expect(owner.Do("GET", rng+"&cursor="+ca, nil), http.StatusOK, "")
+	seenIDs := map[any]bool{}
+	for _, it := range append(items(pa), items(pb)...) {
+		seenIDs[it["id"]] = true
+	}
+	if len(items(pa)) != 2 || len(items(pb)) != 1 || len(seenIDs) != 3 || pb.Body["next_cursor"] != nil {
+		t.Fatalf("tie pages: %v / %v", pa.Body, pb.Body)
+	}
+
+	// A cursor newer than "to" still honours "to"; all categories equal no filter.
+	ct := owner.Expect(owner.Do("GET", path+"?limit=1", nil), http.StatusOK, "").Body["next_cursor"].(string)
+	if got := items(owner.Expect(owner.Do("GET", path+"?to=2026-10-11T00:00:00Z&cursor="+ct, nil), http.StatusOK, "")); len(got) != 2 || got[0]["event_type"] != "livestock.added" {
+		t.Fatalf("cursor newer than to: %v", got)
+	}
+	allCats := "measurement,dosing,water_change,equipment,maintenance,livestock,symptom,treatment,milestone,note,assessment"
+	if a, b := len(items(owner.Do("GET", path+"?category="+allCats, nil))), len(items(owner.Do("GET", path, nil))); a != b {
+		t.Fatalf("all categories %d != unfiltered %d", a, b)
+	}
+
+	stranger.Expect(stranger.Do("GET", path, nil), http.StatusNotFound, "not_found")
+	e.Browser().Expect(e.Browser().Do("GET", path, nil), http.StatusUnauthorized, "")
+
+	// System events have no actor.
+	if _, err := e.Pool.Exec(context.Background(), `UPDATE tank_events SET actor_id = NULL WHERE event_type = 'equipment.installed'`); err != nil {
+		t.Fatal(err)
+	}
+	last := items(owner.Do("GET", path+"?category=equipment", nil))[0]
+	if last["actor"] != nil {
+		t.Fatalf("actor: %v", last["actor"])
+	}
+}
+
+func items(r apptest.Response) []map[string]any {
+	raw, _ := r.Body["items"].([]any)
+	out := make([]map[string]any, len(raw))
+	for i, it := range raw {
+		out[i] = it.(map[string]any)
+	}
+	return out
+}

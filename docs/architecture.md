@@ -94,7 +94,8 @@ internal/db/       # sqlc output (package `dbq`), generated — never edited
 2. `service.go` depends on `dbq`, `platform/database` (tx), `platform/clock`, and other modules'
    **service interfaces** (e.g. `timeline.Recorder`, `tanks.Authorizer`), never their tables.
 3. `http.go` depends on its own service and `platform/httpserver`.
-4. No import cycles: shared primitives live in `tanks` (authorization) and `timeline` (recorder),
+4. No import cycles: shared primitives live in `tanks` (authorization; also serves the timeline
+   feed, since `tanks` imports `timeline`) and `timeline` (recorder),
    which do not import feature modules.
 5. No global state; everything constructed in `cmd/api`.
 
