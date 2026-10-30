@@ -9,6 +9,7 @@
 		api,
 		type DoseEvent,
 		type Equipment,
+		type LatestReading,
 		type LivestockEntry,
 		type MaintenancePlan,
 		type Page,
@@ -20,6 +21,7 @@
 	import { m } from '#lib/paraglide/messages.js';
 	import { getLocale } from '#lib/paraglide/runtime.js';
 	import { timelineText, type TimelineEvent } from '#lib/timeline.js';
+	import { freshnessText, parameterLabel, targetStatusText, valueText } from '#lib/water-tests.js';
 
 	let { tankId, timeZone }: { tankId: string; timeZone: string } = $props();
 
@@ -34,6 +36,7 @@
 	let livestock = $state<LivestockEntry[] | null>(null);
 	let equipment = $state<Equipment[] | null>(null);
 	let recent = $state<TimelineEvent[] | null>(null);
+	let readings = $state<LatestReading[] | null>(null);
 	let failed = $state(false);
 
 	function list<T>(path: string, set: (items: T[]) => void) {
@@ -63,6 +66,7 @@
 		list<LivestockEntry>(`${base}/livestock`, (i) => (livestock = i));
 		list<Equipment>(`${base}/equipment`, (i) => (equipment = i));
 		list<TimelineEvent>(`${base}/timeline?limit=8`, (i) => (recent = i));
+		list<LatestReading>(`${base}/water-tests/latest`, (i) => (readings = i));
 	});
 
 	const maintenanceDue = $derived(
@@ -73,10 +77,21 @@
 			.filter((p) => p.active && !p.overdue && !p.due_today)
 			.sort((a, b) => a.next_due_on.localeCompare(b.next_due_on))[0]
 	);
-	const attentionCount = $derived(
-		(wcOverdue?.length ?? 0) + (doseAttention?.length ?? 0) + maintenanceDue.length
+	const measured = $derived((readings ?? []).filter((l) => l.reading));
+	const offTarget = $derived(
+		measured.filter(
+			(l) => l.reading?.target_status === 'below' || l.reading?.target_status === 'above'
+		)
 	);
-	const allLoaded = $derived(wcOverdue !== null && doseAttention !== null && maintenance !== null);
+	const attentionCount = $derived(
+		(wcOverdue?.length ?? 0) +
+			(doseAttention?.length ?? 0) +
+			maintenanceDue.length +
+			offTarget.length
+	);
+	const allLoaded = $derived(
+		wcOverdue !== null && doseAttention !== null && maintenance !== null && readings !== null
+	);
 </script>
 
 {#if failed}
@@ -115,7 +130,42 @@
 					</a>
 				</li>
 			{/if}
+			{#if offTarget.length > 0}
+				<li>
+					<a href={resolve('/(app)/tanks/[id]/water-tests', { id: tankId })}>
+						<span aria-hidden="true">⚠</span>
+						{m.db_off_target({
+							count: String(offTarget.length),
+							parameters: offTarget.map((l) => parameterLabel(l.parameter)).join(', ')
+						})}
+					</a>
+				</li>
+			{/if}
 		</ul>
+	{/if}
+</section>
+
+<section class="card" aria-labelledby="db-water">
+	<h2 id="db-water">
+		<a href={resolve('/(app)/tanks/[id]/water-tests', { id: tankId })}>{m.wp_title()}</a>
+	</h2>
+	{#if readings === null}
+		<p role="status">{m.loading()}</p>
+	{:else if measured.length === 0}
+		<p class="muted">{m.wp_empty()}</p>
+	{:else}
+		<dl class="facts">
+			{#each measured as l (l.parameter)}
+				<dt>{parameterLabel(l.parameter)}</dt>
+				<dd>
+					{valueText(l.reading!.canonical_value, l.canonical_unit, locale)}
+					{#if targetStatusText(l.reading!.target_status)}· {targetStatusText(
+							l.reading!.target_status
+						)}{/if}
+					<span class="muted">· {l.stale ? '⚠ ' : ''}{freshnessText(l, locale)}</span>
+				</dd>
+			{/each}
+		</dl>
 	{/if}
 </section>
 

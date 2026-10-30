@@ -178,6 +178,34 @@ func (d Decimal) DivRound(o Decimal, places int) (Decimal, error) {
 	return Parse(q.FloatString(places))
 }
 
+// Add returns the exact sum d + o.
+func (d Decimal) Add(o Decimal) Decimal { return d.exact(new(big.Rat).Add(d.rat(), o.rat()), o) }
+
+// Sub returns the exact difference d − o.
+func (d Decimal) Sub(o Decimal) Decimal { return d.exact(new(big.Rat).Sub(d.rat(), o.rat()), o) }
+
+// exact formats a sum or difference of d and o, which needs no more fractional digits
+// than the larger of the two.
+func (d Decimal) exact(r *big.Rat, o Decimal) Decimal {
+	_, fd := d.Digits()
+	_, fo := o.Digits()
+	out, err := Parse(r.FloatString(max(fd, fo)))
+	if err != nil { // unreachable: FloatString yields plain notation
+		panic("decimal: " + err.Error())
+	}
+	return out
+}
+
+// Round returns d rounded half away from zero to places fractional digits. Like DivRound,
+// it is for derived values (unit conversions, estimates), never for stored inputs.
+func (d Decimal) Round(places int) Decimal {
+	out, err := Parse(d.rat().FloatString(places))
+	if err != nil { // unreachable
+		panic("decimal: " + err.Error())
+	}
+	return out
+}
+
 // Mul returns the exact product d × o (a product of finite decimals is a finite decimal).
 func (d Decimal) Mul(o Decimal) Decimal {
 	_, fd := d.Digits()

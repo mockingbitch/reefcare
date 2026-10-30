@@ -32,6 +32,7 @@ import (
 	"reefcare/internal/scheduling"
 	"reefcare/internal/tanks"
 	"reefcare/internal/waterchanges"
+	"reefcare/internal/waterparameters"
 )
 
 const usage = `usage: api [command]
@@ -146,6 +147,7 @@ func New(d Deps) App {
 	idSvc.OnErase(dosing.EraseUserData)
 	idSvc.OnErase(equipment.EraseUserData)
 	idSvc.OnErase(livestock.EraseUserData)
+	idSvc.OnErase(waterparameters.EraseUserData)
 	idSvc.OnErase(notifications.EraseUserData)
 	idSvc.OnErase(tanks.EraseUserData)
 	idSvc.RegisterJobs(runner)
@@ -162,6 +164,7 @@ func New(d Deps) App {
 	doseSvc.RegisterJobs(runner)
 	doseHTTP := dosing.NewHandler(doseSvc, idHTTP.RequireAuth, d.Log)
 	eqHTTP := equipment.NewHandler(equipment.NewService(d.Pool, d.Clock, d.Log), idHTTP.RequireAuth, d.Log)
+	wpHTTP := waterparameters.NewHandler(waterparameters.NewService(d.Pool, d.Clock, d.Log), idHTTP.RequireAuth, d.Log)
 	lsHTTP := livestock.NewHandler(livestock.NewService(d.Pool, d.Clock, d.Log), idHTTP.RequireAuth, d.Log)
 	notifySvc := notifications.NewService(d.Pool, d.Clock, d.Mailer, d.Config.PublicBaseURL, d.Log)
 	notifySvc.AddSource(dosing.Reminders)
@@ -183,11 +186,12 @@ func New(d Deps) App {
 		Mount: func(api chi.Router) {
 			api.Use(idHTTP.Authenticate)
 			idHTTP.Mount(api)
-			tankHTTP.Mount(api, wcHTTP.MountTank, doseHTTP.MountTank, eqHTTP.MountTank, lsHTTP.MountTank)
+			tankHTTP.Mount(api, wcHTTP.MountTank, doseHTTP.MountTank, eqHTTP.MountTank, lsHTTP.MountTank, wpHTTP.MountTank)
 			wcHTTP.Mount(api)
 			doseHTTP.Mount(api)
 			eqHTTP.Mount(api)
 			lsHTTP.Mount(api)
+			wpHTTP.Mount(api)
 			notifyHTTP.Mount(api)
 			schedHTTP.Mount(api)
 		},

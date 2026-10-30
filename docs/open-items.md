@@ -1,10 +1,10 @@
 # ReefCare — Open Items
 
-Last updated: 2026-10-31 · State: Phase 1 done; Phase 2 backend done except 2.1/2.2 (waiting
-on D5): 2.3–2.9 committed on branch `phase-1-foundation`. 2.10 web in progress: water-change
-(2dc0b29), dosing (321ab17), equipment & maintenance (ed1d76d), livestock (bea468b),
-notifications (d4d5baa) and the tank dashboard are done. 2.1/2.2 (parameter catalog and water
-tests) in progress with provisional values pending D5.
+Last updated: 2026-10-31 · State: Phase 1 done. Phase 2 done on branch `phase-1-foundation`:
+2.3–2.9 backend, 2.10 web (water changes 2dc0b29, dosing 321ab17, equipment & maintenance
+ed1d76d, livestock bea468b, notifications d4d5baa, tank dashboard fc30d55), and 2.1/2.2
+parameter catalog, water tests, targets and trend charts. **The catalog values (conversions,
+bounds, freshness) are provisional until the D5 reviewer confirms them (L3, §3g).**
 
 Everything below is known to be **not done**, **partially done**, or **waiting on a decision**.
 Sources: the design docs, the db-architect / go-reviewer / security-auditor reviews, and
@@ -32,7 +32,7 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 |---|---|---|---|---|
 | L1 | Replace the password blocklist with a reviewed top-100k breached-password list | P1 | Only a ~70-entry seed list exists; inventing a list is not acceptable and no reviewed source has been chosen | `internal/identity/common_passwords.txt`; docs/security.md §2 |
 | L2 | Benchmark Argon2id on production hardware | P2 | Login takes ~77 ms on the dev machine, below the 100–250 ms target | `identity.DefaultArgon2Params`, `ARGON2_MAX_CONCURRENCY` |
-| L3 | Domain-expert review of unit conversions and rule thresholds (decision D5) | P1 for Phase 3 | Unreviewed; also covers the display-unit choices in `identity.unitPrefOptions` | Name a reviewer |
+| L3 | Domain-expert review of unit conversions and rule thresholds (decision D5) | P1 for Phase 3 | The water-parameter catalog (`internal/waterparameters/catalog.go`: units, factors, hard bounds, freshness, unit-mistake warnings) was checked by the reef-domain-expert agent only and is labelled provisional in code, API and UI. Also covers the display-unit choices in `identity.unitPrefOptions` | Name a reviewer |
 | L4 | Production deployment config (Caddy, HSTS, CSP, `frame-ancestors`, log redaction of query strings, metrics port kept private) | P2 | `deploy/` holds only dev config | Phase 5, or earlier for staging |
 | L5 | Backups and restore drill | P2 | Not started | Phase 5 |
 | L6 | Check that the `MAIL_FROM` mailbox is monitored, or add a reactivation link | P2 | The account-deactivated email tells a victim to reply; nothing reads replies yet (security review L6) | Decide with D6; reactivation within the 30-day window is a product decision |
@@ -46,7 +46,7 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 | F11 | Sign-out does not reach other open tabs | P3 | Other tabs show the user until their next API call returns 401 (web security review L4). Use a `BroadcastChannel` signal |
 | F10 | Dev-only npm advisories | P3 | `npm audit` reports 4 low-severity issues in `deepmerge` via `@sveltejs/vite-plugin-svelte` (build tooling only); `npm audit --omit=dev` is clean and runs in CI. Wait for the upstream fix |
 | F12 | SvelteKit's route announcer sets an inline style the CSP blocks | P3 | Console error on navigation (`style-src 'self'`); harmless for users, but noisy. Allow its hash in `kit.csp` or hide the announcer with a class |
-| F13 | The tank dashboard makes 8 requests | P3 | Each block loads on its own (`TankDashboard.svelte`). docs/api-guidelines.md planned `GET /tanks/{id}/dashboard` for one round trip; add it if the page feels slow on mobile networks |
+| F13 | The tank dashboard makes 9 requests | P3 | Each block loads on its own (`TankDashboard.svelte`; latest water values added in 2.2). docs/api-guidelines.md planned `GET /tanks/{id}/dashboard` for one round trip; add it if the page feels slow on mobile networks |
 
 ## 3. Background jobs (milestone 2.3 done)
 
@@ -63,7 +63,7 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 
 | # | Item | Priority | Notes |
 |---|---|---|---|
-| W1 | Measured salinity/temperature and pre/post water-test links on water changes | P2 | Need the parameter catalog and units (2.1/2.2, decision D5) |
+| W1 | Measured salinity/temperature and pre/post water-test links on water changes | P2 | Unblocked: the parameter catalog and water tests exist (2.1/2.2); values stay provisional until D5 |
 | W3 | ~~Web screens for schedules and water changes~~ | done | `web/src/routes/(app)/tanks/[id]/water-changes/`: overdue / upcoming / schedules / history, complete and skip dialogs, schedule create/edit with pause/resume/end, one-off record/plan; e2e `web/e2e/water-changes.e2e.ts` with axe. Schedule previews use the new `GET /api/v1/recurrence/preview` (`internal/scheduling`), which applies the server's own recurrence rules |
 | W4 | `Idempotency-Key` header for retried creates (`POST /tanks/{id}/water-changes`) | P3 | Complete/skip are naturally idempotent; a retried POST of a one-off change can create a duplicate. Reuse the per-row pattern from dosing ad-hoc doses (idempotency_key + request_hash) |
 | W5 | Dilution projection after n changes (docs/domain-model.md, with its caveats) | P3 | Needs measured new-water values (2.2), exact decimal powers, a batch/continuous `method` field, and D5 review |
@@ -79,7 +79,7 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 | # | Item | Priority | Notes |
 |---|---|---|---|
 | DS1 | Product stocks (bottle/bag on hand, deducted per dose, low-stock reminder) | P2 | `product_stocks` from the design is not built yet |
-| DS2 | Target parameters on plans (e.g. alkalinity) | P2 | Needs the parameter catalog (2.1, D5) |
+| DS2 | Target parameters on plans (e.g. alkalinity) | P2 | Unblocked by the catalog (2.1); values provisional until D5 |
 | DS3 | Curated product catalog seed | P2 | Seed data in `db/seed/` must be reviewed by the D5 domain expert; until then only private products exist |
 | DS4 | Device-reported doses (pump integrations) | P3 | `reported_by = 'device'` is reserved; ingestion must be idempotent per device event id. ReefCare never controls a pump |
 | DS5 | ~~Web screens for products, plans and history~~ | done | `web/src/routes/(app)/tanks/[id]/dosing/` and `/dosing/products`. Domain-review requirements implemented and re-reviewed by reef-domain-expert (2026-10-31): per-dose dialog (no "mark all"); late doses start with no outcome and need "when"; one-tap confirm only for doses due within 6 h ("Record early…" with a warning otherwise); a failed/partial dose never defaults to the planned amount; same-product proximity hint over half the plan spacing (≥ 6 h, off for plans dosing more often than every 4 h; never-given doses ignored); ad-hoc check at > 3× the largest plan (pump plans: daily total) or an unusual unit; powder-as-solution and drop-size hints. Ad-hoc doses send an `Idempotency-Key`. e2e `web/e2e/dosing.e2e.ts` with axe |
@@ -120,7 +120,7 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 
 | # | Item | Priority | Notes |
 |---|---|---|---|
-| NT1 | Reminders for stale measurements, threshold breaches and new assessments | P2 | Need 2.1/2.2 (water tests) and Phase 3; add sources then |
+| NT1 | Reminders for stale measurements, threshold breaches and new assessments | P2 | Stale and off-target are now computable (`/water-tests/latest`); add a reminder source in `internal/waterparameters`. Assessments come with Phase 3 |
 | NT2 | Upcoming-dose reminders | P3 | Not built: one per dose would be noisy; consider a daily "today's doses" summary |
 | NT3 | Daily digest email (`email_digest`) and assessment email (`email_assessments`) | P3 | Keys reserved; only `email_reminders` is delivered |
 | NT4 | Email provider for production | P1 | Decision D6; dev uses Mailpit. Add List-Unsubscribe and a one-click opt-out link |
@@ -165,6 +165,26 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 | R9 | E2E registration budget | P3 | Registration allows 5 per hour per IP and all e2e traffic shares one address. Module tests now share one account from `web/e2e/global-setup.ts` (3 sign-ups per run). Two local runs within an hour against the same API still hit the limit: restart the API to clear its in-memory limiter |
 | R4 | Go module path is `reefcare` | P3 | The remote is github.com/mockingbitch/reefcare | Rename the module path to it when convenient (touches every import) |
 
+## 3g. Water parameters (milestones 2.1/2.2 done, values provisional)
+
+Backend `internal/waterparameters` (catalog, tests, corrections, versioned targets, latest,
+trends with annotations), migrations 00011–00012, web `/tanks/{id}/water-tests` (latest values,
+history with corrections, entry form, targets, trend charts) and a dashboard block. Reviewed by
+reef-domain-expert (catalog) and go-reviewer; all their major findings were fixed.
+
+| # | Item | Priority | Notes |
+|---|---|---|---|
+| WP1 | Confirm catalog values with the D5 reviewer | P1 | See L3. Until then the UI says "awaiting expert review" on the latest-values card |
+| WP2 | Specific gravity is assumed 25/25 °C | P2 | Readings converted from SG are flagged `estimate`. Non-ATC hydrometers at other temperatures would need a temperature input |
+| WP3 | Free-ammonia (NH3 only) kits are not accepted | P3 | Their value depends on pH and temperature; only total ammonia as NH3, NH3-N or NH4+ is accepted |
+| WP4 | Values are shown in the canonical unit | P2 | Unit preferences only preselect the input unit. Converting displayed values and targets to the preferred unit needs the reverse conversions (same D5 review) |
+| WP5 | Extra parameters (K, I, Sr, Fe, ORP, TDS, …) and ICP imports | P2 | Catalog has 10 system parameters; custom parameters and ICP result import (`source = imported`) are not built |
+| WP6 | Sensor ingestion | P3 | `source = sensor` exists in the schema; no device API. Trends cap at 3000 points per series (newest kept, `truncated` flag) |
+| WP7 | Unit-mistake warnings are shown after saving | P3 | The reading is saved and the warning shown with a "Correct" path. A confirm-before-save would need a dry-run endpoint |
+| WP8 | Corrections are not idempotent | P3 | Documented: a retry after a lost response gets `already_superseded`; reload shows the correction |
+| WP9 | Chart interactions | P3 | No zoom/brush or date picker (30/90/365 days); target bands only appear from when a target took effect |
+| WP10 | Past readings keep the target in effect when measured | — | By design (history in tests and charts). `/latest` compares the newest value with the current target so the dashboard answers "is it fine now?" |
+
 ## 7. Open product and infrastructure decisions
 
 Accepted with defaults on 2026-10-29, but these still need a concrete owner or choice:
@@ -175,5 +195,5 @@ Accepted with defaults on 2026-10-29, but these still need a concrete owner or c
 | D6 | Production email provider (SES, Postmark, other SMTP) | Mailpit locally | Before staging |
 | D7 | Hosting and managed PostgreSQL | Single VPS + managed PG, Singapore | Before staging |
 | D9 | CI platform and dependency bot | GitHub Actions + Renovate (configured) | First run with the PR (R1) |
-| D11 | Chart library | ECharts, confirm in a spike | Milestone 2.10 |
+| D11 | Chart library | **Decided 2026-10-31: no library.** One hand-written SVG chart (`TrendChart.svelte`, ~300 lines) covers the needs: one series per chart, target bands, event markers, crosshair tooltip by pointer and keyboard, text summary and table. ECharts (~1 MB) stays the fallback if zoom/brush or dense sensor data are needed (WP9) | — |
 | — | Local S3-compatible storage (MinIO's status is uncertain; Garage or SeaweedFS) | Not chosen | When media ships (Phase 2.7 / 4) |

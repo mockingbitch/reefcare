@@ -208,6 +208,26 @@ type Notification struct {
 	CreatedAt   time.Time
 }
 
+type ParameterTarget struct {
+	ID             uuid.UUID
+	TankID         uuid.UUID
+	Parameter      string
+	MinValue       *decimal.Decimal
+	IdealValue     *decimal.Decimal
+	MaxValue       *decimal.Decimal
+	FreshnessHours *int32
+	ValidFrom      time.Time
+	ValidTo        *time.Time
+	CreatedBy      *uuid.UUID
+	CreatedAt      time.Time
+}
+
+type ParameterType struct {
+	Code          string
+	CanonicalUnit string
+	DisplayOrder  int32
+}
+
 type Species struct {
 	ID             uuid.UUID
 	OwnerID        *uuid.UUID
@@ -363,4 +383,35 @@ type WaterChangeSchedule struct {
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
 	Version           int32
+}
+
+type WaterTest struct {
+	ID             uuid.UUID
+	TankID         uuid.UUID
+	MeasuredAt     time.Time
+	Source         string
+	Notes          *string
+	RecordedBy     *uuid.UUID
+	IdempotencyKey *string
+	RequestHash    []byte
+	CreatedAt      time.Time
+}
+
+type WaterTestReading struct {
+	ID               uuid.UUID
+	WaterTestID      uuid.UUID
+	TankID           uuid.UUID
+	Parameter        string
+	MeasuredAt       time.Time
+	InputValue       decimal.Decimal
+	InputUnit        string
+	CanonicalValue   decimal.Decimal
+	Estimate         bool
+	Method           *string
+	TestKit          *string
+	Status           string
+	SupersedesID     *uuid.UUID
+	CorrectionReason *string
+	RecordedBy       *uuid.UUID
+	CreatedAt        time.Time
 }

@@ -57,8 +57,12 @@ Designer. Detailed, path-scoped rules live in `.claude/rules/` and load automati
   from `web/e2e/global-setup.ts` (registration is rate limited per IP).
   Notifications done (`/notifications`, `#lib/notifications.js`, unread count in
   `#lib/unread.svelte.js`). Tank dashboard done (`TankDashboard.svelte`, `#lib/timeline.js`);
-  2.10 is complete except water-parameter charts, which come with 2.2. Next: 2.1/2.2 2.1/2.2 once the D5 domain
-  reviewer is named.
+  2.10 is complete. 2.1/2.2 water parameters done (`internal/waterparameters`: catalog in Go
+  mirrored by `parameter_types`, tests with readings kept as entered + exact canonical value,
+  corrections supersede (append-only triggers), versioned targets, `/latest`, `/trends`; web
+  `.../water-tests/`, `#lib/water-tests.js`, SVG `TrendChart.svelte` — D11 decided: no chart
+  library). Catalog values are **provisional until the D5 reviewer confirms them** (open item
+  L3/WP1). **Phase 2 is complete.** Next: Phase 3 (Reef Intelligence) — wait for review first.
 - Unfinished work, known gaps and pending decisions are tracked in `docs/open-items.md`;
   update it when an item is completed or a new gap is found.
 - Go module path is `reefcare`. Migrations use sequential numbering (`make migration name=...`).

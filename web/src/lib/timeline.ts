@@ -5,6 +5,7 @@ import { doseText } from '#lib/dosing.js';
 import { categoryLabel } from '#lib/equipment.js';
 import { eventLabel } from '#lib/livestock.js';
 import { m } from '#lib/paraglide/messages.js';
+import { parameterLabel } from '#lib/water-tests.js';
 
 export type { TimelineEvent };
 
@@ -27,6 +28,15 @@ const categoryLabels: Record<string, () => string> = {
 };
 
 export const timelineCategoryLabel = (c: string) => categoryLabels[c]?.() ?? c;
+
+// Trend-chart markers: one letter per annotated category, explained in the chart legend.
+const annotationLetters: Record<string, () => string> = {
+	dosing: m.wp_ann_dosing_letter,
+	water_change: m.wp_ann_water_change_letter,
+	equipment: m.wp_ann_equipment_letter
+};
+export const annotationLetter = (c: string) => annotationLetters[c]?.() ?? '•';
+export const annotationLabel = timelineCategoryLabel;
 
 export function timelineText(e: TimelineEvent, locale: string): string {
 	const s = (e.summary ?? {}) as Summary;
@@ -69,6 +79,18 @@ export function timelineText(e: TimelineEvent, locale: string): string {
 			if (what === 'removed') return m.tl_equipment_removed({ name });
 			if (what === 'configuration_changed') {
 				return m.tl_equipment_configured({ version: str(s, 'version') });
+			}
+			break;
+		}
+		case 'measurement': {
+			if (what === 'recorded') {
+				const params = Array.isArray(s.parameters) ? (s.parameters as string[]) : [];
+				return params.length
+					? m.tl_measurement_recorded({ parameters: params.map(parameterLabel).join(', ') })
+					: m.tl_cat_measurement();
+			}
+			if (what === 'corrected') {
+				return m.tl_measurement_corrected({ parameter: parameterLabel(str(s, 'parameter')) });
 			}
 			break;
 		}

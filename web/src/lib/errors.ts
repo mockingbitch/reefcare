@@ -42,6 +42,8 @@ export function errorMessage(e: ApiError): string {
 			return m.err_invalid_token();
 		case 'already_resolved':
 			return m.err_already_resolved();
+		case 'already_superseded':
+			return m.err_already_superseded();
 		case 'schedule_ended':
 			return m.err_schedule_ended();
 		case 'plan_completed':
@@ -103,12 +105,16 @@ export function fieldMessage(d: ErrorDetail): string {
 		case 'must_not_be_negative':
 			return m.f_must_not_be_negative();
 		case 'out_of_range':
-			return p.max_integer_digits
-				? m.f_out_of_range_decimal({
-						max_integer_digits: p.max_integer_digits,
-						max_decimals: p.max_decimals ?? '0'
-					})
-				: m.f_out_of_range();
+			if (p.max_integer_digits) {
+				return m.f_out_of_range_decimal({
+					max_integer_digits: p.max_integer_digits,
+					max_decimals: p.max_decimals ?? '0'
+				});
+			}
+			if (p.min && p.max) {
+				return m.f_out_of_range_between({ min: p.min, max: p.max, unit: p.unit ?? '' });
+			}
+			return m.f_out_of_range();
 		case 'invalid_date':
 			return m.f_invalid_date();
 		case 'grantee_not_found':
@@ -123,6 +129,12 @@ export function fieldMessage(d: ErrorDetail): string {
 			return m.f_invalid_rrule();
 		case 'unsupported_rrule_part':
 			return m.f_unsupported_rrule_part();
+		case 'duplicate':
+			return m.f_duplicate_parameter();
+		case 'below_min':
+			return m.f_below_min();
+		case 'outside_range':
+			return m.f_outside_range();
 		case 'before_start':
 			return m.f_before_start();
 		case 'in_future':

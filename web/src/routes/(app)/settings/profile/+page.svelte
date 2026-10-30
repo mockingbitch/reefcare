@@ -16,7 +16,7 @@
 		volume: ['L', 'gal_us'],
 		length: ['cm', 'in'],
 		temperature: ['C', 'F'],
-		alkalinity: ['dKH', 'meq/L', 'ppm'],
+		alkalinity: ['dKH', 'meq/L', 'ppm CaCO3'],
 		salinity: ['SG', 'ppt']
 	};
 	const unitLabels: Record<string, () => string> = {

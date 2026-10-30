@@ -33,6 +33,7 @@ tags:
   - name: equipment
   - name: maintenance
   - name: livestock
+  - name: water-parameters
   - name: notifications
   - name: scheduling
 
@@ -1440,6 +1441,230 @@ paths:
         "422": { $ref: "#/components/responses/Unprocessable" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
+  /api/v1/parameter-types:
+    get:
+      tags: [water-parameters]
+      summary: The parameter catalog with accepted units, hard bounds and default freshness (signed in)
+      description: |
+        PROVISIONAL until decision D5 (open item L3): conversions, bounds and freshness windows
+        await review by the named domain reviewer. Units marked `estimate` convert with an
+        assumption (specific gravity is read as 25/25 °C); readings entered with them are flagged.
+      responses:
+        "200":
+          description: All system parameters in display order (never paginated).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/ParameterType" } }
+                  next_cursor: { type: "null" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+  /api/v1/tanks/{tankID}/water-tests:
+    parameters: [{ $ref: "#/components/parameters/TankID" }]
+    get:
+      tags: [water-parameters]
+      summary: Water tests, newest measured first, with every reading incl. superseded ones (owner or viewer)
+      parameters:
+        - { $ref: "#/components/parameters/Limit" }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { name: parameter, in: query, description: Only tests with a valid reading of this parameter., schema: { type: string } }
+        - { name: from, in: query, description: "Inclusive lower bound on `measured_at` (RFC 3339).", schema: { type: string, format: date-time } }
+        - { name: to, in: query, description: "Exclusive upper bound on `measured_at` (RFC 3339).", schema: { type: string, format: date-time } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/WaterTest" } }
+                  next_cursor: { type: [string, "null"] }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [water-parameters]
+      summary: Record a water test with one reading per parameter (owner; idempotent with Idempotency-Key)
+      description: |
+        Each value is kept as entered (value + unit) and converted exactly to the parameter's
+        canonical unit. Values outside the hard bounds are rejected (`out_of_range` with
+        `min`, `max`, `unit`); likely unit mistakes are accepted and returned as `warnings`
+        for the client to confirm. Records a `measurement.recorded` timeline event.
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WaterTestCreate" }
+      responses:
+        "201":
+          description: Recorded.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WaterTest" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`tank_archived`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+  /api/v1/tanks/{tankID}/water-tests/latest:
+    parameters: [{ $ref: "#/components/parameters/TankID" }]
+    get:
+      tags: [water-parameters]
+      summary: The newest valid reading of every catalog parameter, with freshness and current target (owner or viewer)
+      responses:
+        "200":
+          description: One item per catalog parameter in display order; `reading` is null if never measured.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/LatestReading" } }
+                  next_cursor: { type: "null" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/tanks/{tankID}/water-tests/trends:
+    parameters: [{ $ref: "#/components/parameters/TankID" }]
+    get:
+      tags: [water-parameters]
+      summary: Valid readings over time per parameter, target history and event annotations (owner or viewer)
+      parameters:
+        - { name: parameters, in: query, required: true, description: Comma-separated parameter codes., schema: { type: string }, example: "alkalinity,calcium" }
+        - { name: from, in: query, description: "Inclusive; default `to` − 90 days (RFC 3339).", schema: { type: string, format: date-time } }
+        - { name: to, in: query, description: "Exclusive; default now + 5 minutes (readings may be up to 5 minutes ahead of the server clock) (RFC 3339). At most 732 days after `from`.", schema: { type: string, format: date-time } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Trends" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/tanks/{tankID}/parameter-targets:
+    parameters: [{ $ref: "#/components/parameters/TankID" }]
+    get:
+      tags: [water-parameters]
+      summary: The tank's current targets (owner or viewer)
+      responses:
+        "200":
+          description: Current targets in catalog order (never paginated).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TargetList" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [water-parameters]
+      summary: Replace the tank's targets (owner)
+      description: |
+        The request lists every target the tank should have. Changed targets close the current
+        version and start a new one; targets left out are closed. History is kept, so past
+        readings stay compared with the target valid when they were measured. Values are in the
+        canonical unit.
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [targets]
+              properties:
+                targets:
+                  type: array
+                  description: Required; `[]` removes every target.
+                  maxItems: 10
+                  items: { $ref: "#/components/schemas/TargetInput" }
+      responses:
+        "200":
+          description: The current targets after the change.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TargetList" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`tank_archived`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+  /api/v1/water-tests/{testID}:
+    parameters:
+      - { name: testID, in: path, required: true, description: A malformed ID is answered like an unknown one (404)., schema: { type: string, format: uuid } }
+    get:
+      tags: [water-parameters]
+      summary: One water test with all its readings (owner or viewer)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WaterTest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/readings/{readingID}/corrections:
+    parameters:
+      - { name: readingID, in: path, required: true, description: A malformed ID is answered like an unknown one (404)., schema: { type: string, format: uuid } }
+    post:
+      tags: [water-parameters]
+      summary: Correct a reading (owner); the old reading is kept as `superseded`
+      description: |
+        Readings are never edited. A correction inserts a new valid reading of the same
+        parameter, test and time with a required `reason`, and records a
+        `measurement.corrected` timeline event. Not idempotent: a retry after a lost response
+        is answered `already_superseded`; reload the test to see the correction.
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [value, unit, reason]
+              properties:
+                value: { $ref: "#/components/schemas/Decimal" }
+                unit: { type: string }
+                reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        "201":
+          description: The new reading.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Reading" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`already_superseded` (correct the newest reading) or `tank_archived`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
   /api/v1/species:
     get:
       tags: [livestock]
@@ -2023,7 +2248,7 @@ components:
         volume: { enum: [L, gal_us] }
         length: { enum: [cm, in] }
         temperature: { enum: [C, F] }
-        alkalinity: { enum: [dKH, meq/L, ppm] }
+        alkalinity: { enum: [dKH, meq/L, ppm CaCO3] }
         salinity: { enum: [SG, ppt] }
     NotificationPrefs:
       type: object
@@ -2077,7 +2302,7 @@ components:
             volume: { enum: [L, gal_us, null] }
             length: { enum: [cm, in, null] }
             temperature: { enum: [C, F, null] }
-            alkalinity: { enum: [dKH, meq/L, ppm, null] }
+            alkalinity: { enum: [dKH, meq/L, ppm CaCO3, null] }
             salinity: { enum: [SG, ppt, null] }
         notification_prefs:
           type: [object, "null"]
@@ -2676,6 +2901,165 @@ components:
         occurred_at: { type: string, format: date-time }
         note: { type: [string, "null"] }
         created_at: { type: string, format: date-time }
+    ParameterType:
+      type: object
+      required: [code, canonical_unit, units, hard_min, hard_max, freshness_hours, decimals]
+      properties:
+        code: { type: string, example: alkalinity }
+        canonical_unit: { type: string, example: dKH }
+        units:
+          type: array
+          items:
+            type: object
+            required: [code, estimate]
+            properties:
+              code: { type: string, example: "meq/L" }
+              estimate: { type: boolean }
+        hard_min: { $ref: "#/components/schemas/Decimal" }
+        hard_max: { $ref: "#/components/schemas/Decimal" }
+        freshness_hours: { type: integer, description: Default age after which the latest reading counts as stale. }
+        decimals: { type: integer, description: Canonical values are rounded to this many places. }
+    ReadingInput:
+      type: object
+      additionalProperties: false
+      required: [parameter, value, unit]
+      properties:
+        parameter: { type: string }
+        value: { $ref: "#/components/schemas/Decimal" }
+        unit: { type: string, description: One of the parameter's units; unknown units are rejected. }
+        method:
+          oneOf:
+            - enum: [titration, colorimetric, photometer, refractometer, hydrometer, probe, icp, other]
+            - { type: "null" }
+        test_kit: { type: [string, "null"], maxLength: 100 }
+    WaterTestCreate:
+      type: object
+      additionalProperties: false
+      required: [readings]
+      properties:
+        measured_at: { type: [string, "null"], format: date-time, description: Default now; at most 5 minutes in the future. }
+        notes: { type: [string, "null"], maxLength: 2000 }
+        readings: { type: array, minItems: 1, maxItems: 10, items: { $ref: "#/components/schemas/ReadingInput" } }
+    Reading:
+      type: object
+      required: [id, parameter, measured_at, input_value, input_unit, canonical_value, canonical_unit, estimate, method,
+                 test_kit, status, supersedes_id, correction_reason, target_status, warnings, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        parameter: { type: string }
+        measured_at: { type: string, format: date-time }
+        input_value: { $ref: "#/components/schemas/Decimal" }
+        input_unit: { type: string }
+        canonical_value: { $ref: "#/components/schemas/Decimal" }
+        canonical_unit: { type: string }
+        estimate: { type: boolean, description: Converted with an assumption (e.g. specific gravity at 25 °C). }
+        method: { type: [string, "null"] }
+        test_kit: { type: [string, "null"] }
+        status: { enum: [valid, superseded] }
+        supersedes_id: { type: [string, "null"], format: uuid }
+        correction_reason: { type: [string, "null"] }
+        target_status:
+          oneOf:
+            - enum: [below, within, above]
+            - { type: "null" }
+          description: |
+            Compared with the target valid at `measured_at`; null when no target with a min or
+            max was in effect then (e.g. a test backdated to before the target was set).
+        warnings:
+          type: array
+          items: { type: string }
+          description: "Soft hints, e.g. `looks_like_specific_gravity`, `unusually_high`; new codes may appear."
+        created_at: { type: string, format: date-time }
+    WaterTest:
+      type: object
+      required: [id, tank_id, measured_at, source, notes, readings, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        tank_id: { type: string, format: uuid }
+        measured_at: { type: string, format: date-time }
+        source: { enum: [manual, imported, sensor] }
+        notes: { type: [string, "null"] }
+        readings: { type: array, items: { $ref: "#/components/schemas/Reading" } }
+        created_at: { type: string, format: date-time }
+    Target:
+      type: object
+      required: [parameter, min, ideal, max, freshness_hours, valid_from, valid_to]
+      properties:
+        parameter: { type: string }
+        min: { oneOf: [{ $ref: "#/components/schemas/Decimal" }, { type: "null" }] }
+        ideal: { oneOf: [{ $ref: "#/components/schemas/Decimal" }, { type: "null" }] }
+        max: { oneOf: [{ $ref: "#/components/schemas/Decimal" }, { type: "null" }] }
+        freshness_hours: { type: [integer, "null"] }
+        valid_from: { type: string, format: date-time }
+        valid_to: { type: [string, "null"], format: date-time }
+    TargetInput:
+      type: object
+      additionalProperties: false
+      required: [parameter]
+      description: At least one of min, ideal, max, freshness_hours; min ≤ ideal ≤ max; values in the canonical unit.
+      properties:
+        parameter: { type: string }
+        min: { oneOf: [{ $ref: "#/components/schemas/Decimal" }, { type: "null" }] }
+        ideal: { oneOf: [{ $ref: "#/components/schemas/Decimal" }, { type: "null" }] }
+        max: { oneOf: [{ $ref: "#/components/schemas/Decimal" }, { type: "null" }] }
+        freshness_hours: { type: [integer, "null"], minimum: 1, maximum: 8760 }
+    TargetList:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Target" } }
+        next_cursor: { type: "null" }
+    LatestReading:
+      type: object
+      required: [parameter, canonical_unit, reading, freshness_hours, stale, target]
+      properties:
+        parameter: { type: string }
+        canonical_unit: { type: string }
+        reading:
+          oneOf: [{ $ref: "#/components/schemas/Reading" }, { type: "null" }]
+          description: Its `target_status` compares the value with the current `target` (not the one in effect when measured).
+        freshness_hours: { type: integer, description: The target's freshness or the catalog default. }
+        stale: { type: boolean, description: No reading, or the newest is older than `freshness_hours`. }
+        target: { oneOf: [{ $ref: "#/components/schemas/Target" }, { type: "null" }] }
+    Trends:
+      type: object
+      required: [from, to, series, annotations, truncated, annotations_truncated]
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        series:
+          type: array
+          items:
+            type: object
+            required: [parameter, unit, points, targets, truncated]
+            properties:
+              parameter: { type: string }
+              unit: { type: string, description: The canonical unit of every point. }
+              points:
+                type: array
+                items:
+                  type: object
+                  required: [t, v, reading_id, estimate]
+                  properties:
+                    t: { type: string, format: date-time }
+                    v: { $ref: "#/components/schemas/Decimal" }
+                    reading_id: { type: string, format: uuid }
+                    estimate: { type: boolean }
+              targets: { type: array, items: { $ref: "#/components/schemas/Target" }, description: Versions overlapping the range. }
+              truncated: { type: boolean, description: More than 3000 points in the range; only the newest 3000 are returned. }
+        annotations:
+          type: array
+          description: Dosing, water-change and equipment timeline events in the range, oldest first (the newest 500).
+          items:
+            type: object
+            required: [t, category, event_type, summary]
+            properties:
+              t: { type: string, format: date-time }
+              category: { $ref: "#/components/schemas/TimelineCategory" }
+              event_type: { type: string }
+              summary: { type: object, additionalProperties: true }
+        truncated: { type: boolean, description: Some series were truncated; narrow the range. }
+        annotations_truncated: { type: boolean, description: More than 500 events; the oldest were left out. }
     TimelineCategory:
       enum: [measurement, dosing, water_change, equipment, maintenance, livestock, symptom, treatment, milestone, note, assessment]
     TimelineEvent:

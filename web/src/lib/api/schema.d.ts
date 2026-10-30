@@ -2869,6 +2869,486 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/parameter-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The parameter catalog with accepted units, hard bounds and default freshness (signed in)
+         * @description PROVISIONAL until decision D5 (open item L3): conversions, bounds and freshness windows
+         *     await review by the named domain reviewer. Units marked `estimate` convert with an
+         *     assumption (specific gravity is read as 25/25 °C); readings entered with them are flagged.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description All system parameters in display order (never paginated). */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: components["schemas"]["ParameterType"][];
+                            next_cursor: null;
+                        };
+                    };
+                };
+                401: components["responses"]["Unauthenticated"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tanks/{tankID}/water-tests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                tankID: components["parameters"]["TankID"];
+            };
+            cookie?: never;
+        };
+        /** Water tests, newest measured first, with every reading incl. superseded ones (owner or viewer) */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: components["parameters"]["Limit"];
+                    /** @description Opaque `next_cursor` from the previous page. */
+                    cursor?: components["parameters"]["Cursor"];
+                    /** @description Only tests with a valid reading of this parameter. */
+                    parameter?: string;
+                    /** @description Inclusive lower bound on `measured_at` (RFC 3339). */
+                    from?: string;
+                    /** @description Exclusive upper bound on `measured_at` (RFC 3339). */
+                    to?: string;
+                };
+                header?: never;
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    tankID: components["parameters"]["TankID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: components["schemas"]["WaterTest"][];
+                            next_cursor: string | null;
+                        };
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        /**
+         * Record a water test with one reading per parameter (owner; idempotent with Idempotency-Key)
+         * @description Each value is kept as entered (value + unit) and converted exactly to the parameter's
+         *     canonical unit. Values outside the hard bounds are rejected (`out_of_range` with
+         *     `min`, `max`, `unit`); likely unit mistakes are accepted and returned as `warnings`
+         *     for the client to confirm. Records a `measurement.recorded` timeline event.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                    /**
+                     * @description Makes a create safe to retry: a retry returns the first result (header
+                     *     `Idempotent-Replayed: true`); the same key with a different request is 422
+                     *     `idempotency_key_reused`.
+                     */
+                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                };
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    tankID: components["parameters"]["TankID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WaterTestCreate"];
+                };
+            };
+            responses: {
+                /** @description Recorded. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["WaterTest"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `tank_archived` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                422: components["responses"]["Unprocessable"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tanks/{tankID}/water-tests/latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                tankID: components["parameters"]["TankID"];
+            };
+            cookie?: never;
+        };
+        /** The newest valid reading of every catalog parameter, with freshness and current target (owner or viewer) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    tankID: components["parameters"]["TankID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One item per catalog parameter in display order; `reading` is null if never measured. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: components["schemas"]["LatestReading"][];
+                            next_cursor: null;
+                        };
+                    };
+                };
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tanks/{tankID}/water-tests/trends": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                tankID: components["parameters"]["TankID"];
+            };
+            cookie?: never;
+        };
+        /** Valid readings over time per parameter, target history and event annotations (owner or viewer) */
+        get: {
+            parameters: {
+                query: {
+                    /**
+                     * @description Comma-separated parameter codes.
+                     * @example alkalinity,calcium
+                     */
+                    parameters: string;
+                    /** @description Inclusive; default `to` − 90 days (RFC 3339). */
+                    from?: string;
+                    /** @description Exclusive; default now + 5 minutes (readings may be up to 5 minutes ahead of the server clock) (RFC 3339). At most 732 days after `from`. */
+                    to?: string;
+                };
+                header?: never;
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    tankID: components["parameters"]["TankID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Trends"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tanks/{tankID}/parameter-targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                tankID: components["parameters"]["TankID"];
+            };
+            cookie?: never;
+        };
+        /** The tank's current targets (owner or viewer) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    tankID: components["parameters"]["TankID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Current targets in catalog order (never paginated). */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TargetList"];
+                    };
+                };
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        /**
+         * Replace the tank's targets (owner)
+         * @description The request lists every target the tank should have. Changed targets close the current
+         *     version and start a new one; targets left out are closed. History is kept, so past
+         *     readings stay compared with the target valid when they were measured. Values are in the
+         *     canonical unit.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    tankID: components["parameters"]["TankID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @description Required; `[]` removes every target. */
+                        targets: components["schemas"]["TargetInput"][];
+                    };
+                };
+            };
+            responses: {
+                /** @description The current targets after the change. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TargetList"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `tank_archived` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                422: components["responses"]["Unprocessable"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/water-tests/{testID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                testID: string;
+            };
+            cookie?: never;
+        };
+        /** One water test with all its readings (owner or viewer) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    testID: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["WaterTest"];
+                    };
+                };
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/readings/{readingID}/corrections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                readingID: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Correct a reading (owner); the old reading is kept as `superseded`
+         * @description Readings are never edited. A correction inserts a new valid reading of the same
+         *     parameter, test and time with a required `reason`, and records a
+         *     `measurement.corrected` timeline event. Not idempotent: a retry after a lost response
+         *     is answered `already_superseded`; reload the test to see the correction.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    readingID: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        value: components["schemas"]["Decimal"];
+                        unit: string;
+                        reason: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description The new reading. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Reading"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `already_superseded` (correct the newest reading) or `tank_archived` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                422: components["responses"]["Unprocessable"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/species": {
         parameters: {
             query?: never;
@@ -3729,7 +4209,7 @@ export interface components {
             /** @enum {unknown} */
             temperature?: "C" | "F";
             /** @enum {unknown} */
-            alkalinity?: "dKH" | "meq/L" | "ppm";
+            alkalinity?: "dKH" | "meq/L" | "ppm CaCO3";
             /** @enum {unknown} */
             salinity?: "SG" | "ppt";
         };
@@ -3785,7 +4265,7 @@ export interface components {
                 /** @enum {unknown} */
                 temperature?: "C" | "F" | null;
                 /** @enum {unknown} */
-                alkalinity?: "dKH" | "meq/L" | "ppm" | null;
+                alkalinity?: "dKH" | "meq/L" | "ppm CaCO3" | null;
                 /** @enum {unknown} */
                 salinity?: "SG" | "ppt" | null;
             } | null;
@@ -4431,6 +4911,154 @@ export interface components {
             note: string | null;
             /** Format: date-time */
             created_at: string;
+        };
+        ParameterType: {
+            /** @example alkalinity */
+            code: string;
+            /** @example dKH */
+            canonical_unit: string;
+            units: {
+                /** @example meq/L */
+                code: string;
+                estimate: boolean;
+            }[];
+            hard_min: components["schemas"]["Decimal"];
+            hard_max: components["schemas"]["Decimal"];
+            /** @description Default age after which the latest reading counts as stale. */
+            freshness_hours: number;
+            /** @description Canonical values are rounded to this many places. */
+            decimals: number;
+        };
+        ReadingInput: {
+            parameter: string;
+            value: components["schemas"]["Decimal"];
+            /** @description One of the parameter's units; unknown units are rejected. */
+            unit: string;
+            method?: ("titration" | "colorimetric" | "photometer" | "refractometer" | "hydrometer" | "probe" | "icp" | "other") | null;
+            test_kit?: string | null;
+        };
+        WaterTestCreate: {
+            /**
+             * Format: date-time
+             * @description Default now; at most 5 minutes in the future.
+             */
+            measured_at?: string | null;
+            notes?: string | null;
+            readings: components["schemas"]["ReadingInput"][];
+        };
+        Reading: {
+            /** Format: uuid */
+            id: string;
+            parameter: string;
+            /** Format: date-time */
+            measured_at: string;
+            input_value: components["schemas"]["Decimal"];
+            input_unit: string;
+            canonical_value: components["schemas"]["Decimal"];
+            canonical_unit: string;
+            /** @description Converted with an assumption (e.g. specific gravity at 25 °C). */
+            estimate: boolean;
+            method: string | null;
+            test_kit: string | null;
+            /** @enum {unknown} */
+            status: "valid" | "superseded";
+            /** Format: uuid */
+            supersedes_id: string | null;
+            correction_reason: string | null;
+            /**
+             * @description Compared with the target valid at `measured_at`; null when no target with a min or
+             *     max was in effect then (e.g. a test backdated to before the target was set).
+             */
+            target_status: ("below" | "within" | "above") | null;
+            /** @description Soft hints, e.g. `looks_like_specific_gravity`, `unusually_high`; new codes may appear. */
+            warnings: string[];
+            /** Format: date-time */
+            created_at: string;
+        };
+        WaterTest: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tank_id: string;
+            /** Format: date-time */
+            measured_at: string;
+            /** @enum {unknown} */
+            source: "manual" | "imported" | "sensor";
+            notes: string | null;
+            readings: components["schemas"]["Reading"][];
+            /** Format: date-time */
+            created_at: string;
+        };
+        Target: {
+            parameter: string;
+            min: components["schemas"]["Decimal"] | null;
+            ideal: components["schemas"]["Decimal"] | null;
+            max: components["schemas"]["Decimal"] | null;
+            freshness_hours: number | null;
+            /** Format: date-time */
+            valid_from: string;
+            /** Format: date-time */
+            valid_to: string | null;
+        };
+        /** @description At least one of min, ideal, max, freshness_hours; min ≤ ideal ≤ max; values in the canonical unit. */
+        TargetInput: {
+            parameter: string;
+            min?: components["schemas"]["Decimal"] | null;
+            ideal?: components["schemas"]["Decimal"] | null;
+            max?: components["schemas"]["Decimal"] | null;
+            freshness_hours?: number | null;
+        };
+        TargetList: {
+            items: components["schemas"]["Target"][];
+            next_cursor: null;
+        };
+        LatestReading: {
+            parameter: string;
+            canonical_unit: string;
+            /** @description Its `target_status` compares the value with the current `target` (not the one in effect when measured). */
+            reading: components["schemas"]["Reading"] | null;
+            /** @description The target's freshness or the catalog default. */
+            freshness_hours: number;
+            /** @description No reading */
+            stale: boolean;
+            target: components["schemas"]["Target"] | null;
+        };
+        Trends: {
+            /** Format: date-time */
+            from: string;
+            /** Format: date-time */
+            to: string;
+            series: {
+                parameter: string;
+                /** @description The canonical unit of every point. */
+                unit: string;
+                points: {
+                    /** Format: date-time */
+                    t: string;
+                    v: components["schemas"]["Decimal"];
+                    /** Format: uuid */
+                    reading_id: string;
+                    estimate: boolean;
+                }[];
+                /** @description Versions overlapping the range. */
+                targets: components["schemas"]["Target"][];
+                /** @description More than 3000 points in the range; only the newest 3000 are returned. */
+                truncated: boolean;
+            }[];
+            /** @description Dosing, water-change and equipment timeline events in the range, oldest first (the newest 500). */
+            annotations: {
+                /** Format: date-time */
+                t: string;
+                category: components["schemas"]["TimelineCategory"];
+                event_type: string;
+                summary: {
+                    [key: string]: unknown;
+                };
+            }[];
+            /** @description Some series were truncated; narrow the range. */
+            truncated: boolean;
+            /** @description More than 500 events; the oldest were left out. */
+            annotations_truncated: boolean;
         };
         /** @enum {unknown} */
         TimelineCategory: "measurement" | "dosing" | "water_change" | "equipment" | "maintenance" | "livestock" | "symptom" | "treatment" | "milestone" | "note" | "assessment";

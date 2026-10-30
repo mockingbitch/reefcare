@@ -58,26 +58,31 @@ never hard-deleted by users.
 - **Correction** — a new reading with `supersedes_id`; the old reading becomes `superseded`.
 - **ParameterTarget** — versioned min / ideal / max per tank and parameter, valid from a time.
 
-Canonical units (stored in `canonical_value`):
+Canonical units (stored in `canonical_value`, rounded to the listed decimals). The source of
+truth is `internal/waterparameters/catalog.go` (mirrored by the `parameter_types` table);
+values are **provisional until the D5 reviewer confirms them** (open items L3/WP1).
 
-| Parameter | Canonical | Accepted input units |
-|---|---|---|
-| Alkalinity | dKH | dKH, meq/L, ppm (as CaCO3) |
-| Calcium | mg/L | mg/L, ppm |
-| Magnesium | mg/L | mg/L, ppm |
-| pH | pH | pH |
-| Temperature | °C | °C, °F |
-| Salinity | ppt | ppt, PSU, SG (with reference temperature) |
-| Nitrate | mg/L NO3 | mg/L NO3, mg/L NO3-N, ppm |
-| Phosphate | mg/L PO4 | mg/L PO4, mg/L PO4-P, ppb PO4, ppm |
-| Ammonia | mg/L (total NH3/NH4+) | mg/L, ppm |
-| Nitrite | mg/L NO2 | mg/L NO2, ppm |
+| Parameter | Canonical (decimals) | Accepted input units | Hard bounds | Fresh for |
+|---|---|---|---|---|
+| Alkalinity | dKH (2) | dKH, meq/L, ppm CaCO3 | 0–30 | 7 days |
+| Calcium | mg/L (0) | mg/L, ppm | 0–1000 | 14 days |
+| Magnesium | mg/L (0) | mg/L, ppm | 0–3000 | 30 days |
+| pH | pH (2) | pH | 0–14 | 7 days |
+| Temperature | C (1) | C, F | 0–45 | 7 days |
+| Salinity | ppt (1) | ppt, PSU, SG (estimate) | 0–60 | 7 days |
+| Nitrate | mg/L NO3 (2) | mg/L NO3, ppm, mg/L NO3-N | 0–500 | 14 days |
+| Phosphate | mg/L PO4 (4) | mg/L PO4, ppm, mg/L PO4-P, ppb PO4, ppb PO4-P | 0–20 | 14 days |
+| Ammonia | mg/L NH3, total ammonia (2) | mg/L NH3, ppm, mg/L NH3-N, mg/L NH4+ | 0–20 | 30 days |
+| Nitrite | mg/L NO2 (3) | mg/L NO2, ppm, mg/L NO2-N, ppb NO2-N | 0–50 | 30 days |
 
-`ppm` is treated as mg/L for dilute seawater measurements, documented as an approximation.
-Conversion factors (to be reviewed by `reef-domain-expert` before implementation):
-1 meq/L = 2.8 dKH; 1 dKH = 17.86 ppm CaCO3; NO3 = NO3-N × 4.427; PO4 = PO4-P × 3.066;
-°C = (°F − 32) × 5/9. SG ↔ ppt depends on temperature and is computed with a documented seawater
-equation; the result is labeled an estimate.
+`ppm` is treated as mg/L of the canonical form (what hobby kits report). Factors (exact decimal
+arithmetic, `platform/decimal`): 1 meq/L = 2.804 dKH; 1 dKH = 17.848 mg/L as CaCO3;
+NO3 = NO3-N × 4.427; PO4 = PO4-P × 3.066; NH3 = NH3-N × 1.216 = NH4+ × 0.9441;
+NO2 = NO2-N × 3.285; °C = (°F − 32) × 5/9. SG is read as 25/25 °C (ATC refractometers) and
+converted by inverting the UNESCO EOS-80 equation of state; the reading is flagged `estimate`.
+Values outside the hard bounds are rejected; likely unit mistakes (an SG typed as ppt, phosphate
+above 2 mg/L) are saved and returned as non-blocking `warnings`. Freshness can be overridden per
+tank on the target. Reading status is `valid` or `superseded` (no `flagged` yet).
 
 ### Dosing
 - **DosingProduct** — global (curated) or user-private; manufacturer, category, components,

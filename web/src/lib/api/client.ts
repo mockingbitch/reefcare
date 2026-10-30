@@ -38,6 +38,14 @@ export type LivestockEntryPatch = Schemas['LivestockEntryPatch'];
 export type LivestockEvent = Schemas['LivestockEvent'];
 export type Notification = Schemas['Notification'];
 export type TimelineEvent = Schemas['TimelineEvent'];
+export type ParameterType = Schemas['ParameterType'];
+export type WaterTest = Schemas['WaterTest'];
+export type WaterTestCreate = Schemas['WaterTestCreate'];
+export type Reading = Schemas['Reading'];
+export type Target = Schemas['Target'];
+export type TargetInput = Schemas['TargetInput'];
+export type LatestReading = Schemas['LatestReading'];
+export type Trends = Schemas['Trends'];
 export type Page<T> = { items: T[]; next_cursor: string | null };
 
 export type ErrorDetail = { field?: string; code: string; params?: Record<string, string> };
@@ -64,7 +72,7 @@ export function csrfToken(cookies: string = globalThis.document?.cookie ?? ''): 
 
 const unsafe = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE';
+type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 /** Listeners called when any request answers 401, e.g. to clear the session. */
 const unauthenticatedListeners = new Set<() => void>();

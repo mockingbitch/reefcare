@@ -135,3 +135,26 @@ func TestMul(t *testing.T) {
 		}
 	}
 }
+
+func TestAddSubRound(t *testing.T) {
+	tests := []struct{ a, b, sum, diff string }{
+		{"8.3", "0.25", "8.55", "8.05"},
+		{"32", "77", "109", "-45"},
+		{"-0.5", "0.5", "0", "-1"},
+		{"1.0001", "0.0009", "1.001", "0.9992"},
+	}
+	for _, tt := range tests {
+		a, b := MustParse(tt.a), MustParse(tt.b)
+		if got := a.Add(b).String(); got != tt.sum {
+			t.Errorf("%s + %s = %s, want %s", tt.a, tt.b, got, tt.sum)
+		}
+		if got := a.Sub(b).String(); got != tt.diff {
+			t.Errorf("%s - %s = %s, want %s", tt.a, tt.b, got, tt.diff)
+		}
+	}
+	for in, want := range map[string]string{"8.345": "8.35", "-8.345": "-8.35", "8.344": "8.34", "8": "8"} {
+		if got := MustParse(in).Round(2).String(); got != want {
+			t.Errorf("Round(%s, 2) = %s, want %s", in, got, want)
+		}
+	}
+}
