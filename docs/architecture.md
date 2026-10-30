@@ -36,7 +36,7 @@ first-party app.
 | Decimals | `shopspring/decimal` via sqlc override + `jackc/pgx-shopspring-decimal` | Exact NUMERIC round-trip |
 | Validation | Explicit validation functions per command (no reflection tags) | Domain-specific rules, clear errors |
 | Password hashing | Argon2id (`golang.org/x/crypto/argon2`) | OWASP recommended |
-| Schedules | RRULE subset via `teambition/rrule-go` | Standard format; easy UI mapping |
+| Schedules | RRULE subset, in-house (`internal/platform/recurrence`) | Standard syntax for the UI; the subset (DAILY/WEEKLY/MONTHLY, INTERVAL, BYDAY, BYMONTHDAY ≤ 28, BYHOUR, BYMINUTE) is small, and wall-clock/DST behaviour is pinned by our own tests. Replaces the earlier `rrule-go` plan (milestone 2.5) |
 | Jobs | In-house `jobs` table with `FOR UPDATE SKIP LOCKED` | Few dependencies; fully under our control. Alternative: `riverqueue/river` (decision D3) |
 | Logging | `log/slog` JSON handler | Standard library |
 | Metrics | Prometheus client (`/metrics` internal only) | De-facto standard |
@@ -160,6 +160,7 @@ Implemented in `internal/platform/jobs` (milestone 2.3, decision D3: in-house).
 | `identity.purge_auth` | hourly | delete expired / long-revoked sessions and old tokens |
 | `identity.erase_due` | hourly | enqueue `identity.erase_account` for accounts deactivated > 30 days |
 | `identity.erase_account` | per account | module erasers + anonymize the users row |
+| `waterchanges.materialize` | hourly | keep occurrences of active schedules 35 days ahead |
 | `jobs.cleanup` | daily | delete old succeeded and dead jobs |
 
 Planned (later milestones): `dosing.materialize`, `dosing.mark_missed`, `waterchanges.materialize`,

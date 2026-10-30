@@ -166,3 +166,14 @@ func (d Decimal) NumericValue() (pgtype.Numeric, error) {
 	}
 	return pgtype.Numeric{Int: i, Exp: int32(-len(frac)), Valid: true}, nil //nolint:gosec // len(frac) < maxLen
 }
+
+// DivRound returns d / o rounded half away from zero to places decimal digits. Dividing
+// by zero is an error. Use it only for derived, displayed values (ratios, estimates),
+// never to rewrite a stored measurement.
+func (d Decimal) DivRound(o Decimal, places int) (Decimal, error) {
+	if o.Sign() == 0 {
+		return Decimal{}, errors.New("decimal: division by zero")
+	}
+	q := new(big.Rat).Quo(d.rat(), o.rat())
+	return Parse(q.FloatString(places))
+}

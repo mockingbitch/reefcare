@@ -46,12 +46,20 @@ func DefaultLimits(clk clock.Clock) Limits {
 
 // Service implements tank workflows. Every method authorizes through Authorizer.
 type Service struct {
-	pool   *pgxpool.Pool
-	clock  clock.Clock
-	authz  Authorizer
-	limits Limits
-	log    *slog.Logger
+	pool    *pgxpool.Pool
+	clock   clock.Clock
+	authz   Authorizer
+	limits  Limits
+	log     *slog.Logger
+	archive []ArchiveHook
 }
+
+// ArchiveHook lets a tank-owned module react inside the archive transaction (end
+// schedules, resolve open items), since an archived tank is read-only for good.
+type ArchiveHook func(ctx context.Context, q *dbq.Queries, tankID, actorID uuid.UUID, now time.Time) error
+
+// OnArchive registers a hook. Call during wiring.
+func (s *Service) OnArchive(h ArchiveHook) { s.archive = append(s.archive, h) }
 
 // NewService wires the tank service.
 func NewService(pool *pgxpool.Pool, clk clock.Clock, limits Limits, log *slog.Logger) *Service {
@@ -255,6 +263,11 @@ func (s *Service) Archive(ctx context.Context, a Actor, id uuid.UUID) (Tank, err
 				SourceType: "tank", SourceID: id, ActorID: &a.UserID,
 			}); err != nil {
 				return err
+			}
+			for _, h := range s.archive {
+				if err := h(ctx, q, id, a.UserID, now); err != nil {
+					return err
+				}
 			}
 		}
 		t, err = s.load(ctx, q, a.UserID, id)

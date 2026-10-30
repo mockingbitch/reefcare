@@ -26,6 +26,7 @@ import (
 	"reefcare/internal/platform/mail"
 	"reefcare/internal/platform/metrics"
 	"reefcare/internal/tanks"
+	"reefcare/internal/waterchanges"
 )
 
 const usage = `usage: api [command]
@@ -135,10 +136,17 @@ func New(d Deps) App {
 	idSvc := identity.NewService(d.Pool, d.Clock, identity.NewHasher(d.Argon2, d.Config.Argon2MaxConcurrent), d.Mailer,
 		identity.DefaultLimits(d.Clock), identity.DefaultConfig(d.Config.PublicBaseURL), d.Log)
 	// Every module holding user data registers how to erase it (docs/security.md §9).
+	// Order matters: tank-owned modules first, then tanks (FKs are RESTRICT).
+	idSvc.OnErase(waterchanges.EraseUserData)
 	idSvc.OnErase(tanks.EraseUserData)
 	idSvc.RegisterJobs(runner)
 	idHTTP := identity.NewHandler(idSvc, d.Log, d.Config.SecureCookies())
-	tankHTTP := tanks.NewHandler(tanks.NewService(d.Pool, d.Clock, tanks.DefaultLimits(d.Clock), d.Log), idHTTP.RequireAuth, d.Log)
+	tankSvc := tanks.NewService(d.Pool, d.Clock, tanks.DefaultLimits(d.Clock), d.Log)
+	tankSvc.OnArchive(waterchanges.OnTankArchived)
+	tankHTTP := tanks.NewHandler(tankSvc, idHTTP.RequireAuth, d.Log)
+	wcSvc := waterchanges.NewService(d.Pool, d.Clock, d.Log)
+	wcSvc.RegisterJobs(runner)
+	wcHTTP := waterchanges.NewHandler(wcSvc, idHTTP.RequireAuth, d.Log)
 
 	var observe func(http.Handler) http.Handler
 	if d.Metrics != nil {
@@ -152,7 +160,8 @@ func New(d Deps) App {
 		Mount: func(api chi.Router) {
 			api.Use(idHTTP.Authenticate)
 			idHTTP.Mount(api)
-			tankHTTP.Mount(api)
+			tankHTTP.Mount(api, wcHTTP.MountTank)
+			wcHTTP.Mount(api)
 		},
 	})
 	return App{Handler: handler, Jobs: runner}

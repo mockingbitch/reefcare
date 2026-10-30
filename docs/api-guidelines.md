@@ -198,7 +198,13 @@ writes; anyone else gets 404.
 | POST | `/api/v1/water-changes/{eventID}/complete` | owner — *idempotent* |
 | POST | `/api/v1/water-changes/{eventID}/skip` | owner — reason required |
 
-Completion response includes `estimate: {fraction_of_system: "0.14", assumptions: ["complete mixing", "system volume 72 L as entered"]}`.
+Every schedule and water change includes `estimate: {fraction_of_system: "0.139", system_volume_l: "72",
+assumptions: ["complete_mixing", "system_volume_as_entered"]}` (assumption codes are localized by the
+client). `?status=` accepts `overdue`, `scheduled` (upcoming, not overdue), `completed`, `skipped`;
+`overdue` is derived (scheduled and > 24 h late) and never auto-completed. `complete`/`skip` are
+naturally idempotent (repeating the same request returns 200; a different one 409
+`already_resolved`); the `Idempotency-Key` header is not implemented yet (open item W4). Schedules:
+`PATCH /water-change-schedules/{id}` with `version`; `status` `active|paused|ended` (`ended` terminal).
 
 ### Equipment, maintenance, livestock (Phase 2)
 - `GET/POST /tanks/{tankID}/equipment`, `GET/PATCH /equipment/{id}`, `POST /equipment/{id}/remove`

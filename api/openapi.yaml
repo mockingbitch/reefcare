@@ -28,6 +28,7 @@ tags:
   - name: auth
   - name: profile
   - name: tanks
+  - name: water-changes
 
 paths:
   /healthz:
@@ -426,7 +427,10 @@ paths:
     post:
       tags: [tanks]
       summary: Archive a tank (owner; terminal, idempotent)
-      description: Archived tanks stay readable but can no longer change. Records `tank.archived` on the timeline.
+      description: |
+        Archived tanks stay readable but can no longer change. Records `tank.archived` on the
+        timeline. Water-change schedules end, upcoming occurrences are removed and changes still
+        open (including overdue ones) are resolved as skipped with reason code `tank_archived`.
       parameters: [{ $ref: "#/components/parameters/CSRF" }]
       responses:
         "200":
@@ -519,6 +523,227 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
+  /api/v1/tanks/{tankID}/water-change-schedules:
+    parameters: [{ $ref: "#/components/parameters/TankID" }]
+    get:
+      tags: [water-changes]
+      summary: List the tank's water-change schedules (owner or viewer)
+      responses:
+        "200":
+          description: All schedules of the tank, oldest first (never paginated).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/WaterChangeSchedule" } }
+                  next_cursor: { type: "null" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [water-changes]
+      summary: Create a recurring water-change schedule (owner)
+      description: |
+        Occurrences are created up to 35 days ahead at once and kept ahead by an hourly job;
+        a new schedule never starts with overdue occurrences.
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WaterChangeScheduleCreate" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WaterChangeSchedule" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`tank_archived`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/water-change-schedules/{scheduleID}:
+    parameters:
+      - name: scheduleID
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [water-changes]
+      summary: Edit, pause, resume or end a schedule (owner, merge patch, `version` required)
+      description: |
+        Changes to timing, volume, salt or status replace the upcoming occurrences nobody acted
+        on. Overdue and resolved occurrences are history and stay. `ended` is terminal.
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WaterChangeSchedulePatch" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WaterChangeSchedule" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`version_conflict`, `schedule_ended` or `tank_archived`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/tanks/{tankID}/water-changes:
+    parameters: [{ $ref: "#/components/parameters/TankID" }]
+    get:
+      tags: [water-changes]
+      summary: List water changes, newest event time first (owner or viewer)
+      description: |
+        Event time is `completed_at` for done changes, otherwise `scheduled_for`. A scheduled
+        change past its grace (24 h, or half the schedule's spacing if shorter) is returned with
+        `overdue: true` until the keeper completes or skips it. Field errors include
+        `out_of_range` (before 2000-01-01) and `in_future`.
+      parameters:
+        - name: status
+          in: query
+          description: Comma-separated subset of `overdue`, `scheduled` (upcoming, not overdue), `completed`, `skipped`. Default all.
+          schema: { type: string, example: "overdue,scheduled" }
+        - name: from
+          in: query
+          description: Event time ≥ (RFC 3339)
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          description: Event time < (RFC 3339)
+          schema: { type: string, format: date-time }
+        - { $ref: "#/components/parameters/Limit" }
+        - { $ref: "#/components/parameters/Cursor" }
+      responses:
+        "200":
+          description: A page of water changes.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/WaterChange" } }
+                  next_cursor: { type: [string, "null"] }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [water-changes]
+      summary: Record a water change done without a schedule, or plan a one-time change (owner)
+      description: Exactly one of `completed_at` (done; `actual_volume_l` required; added to the timeline) or `scheduled_for` (planned; `planned_volume_l` required).
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WaterChangeRecord" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WaterChange" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`tank_archived`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/water-changes/{eventID}/complete:
+    parameters: [{ $ref: "#/components/parameters/WaterChangeID" }]
+    post:
+      tags: [water-changes]
+      summary: Complete a scheduled (possibly overdue) water change (owner, idempotent)
+      description: Repeating the same completion returns 200 with the stored change; a different completion or a skip after resolution is 409 `already_resolved`. Adds `water_change.completed` to the timeline.
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [actual_volume_l]
+              properties:
+                completed_at: { type: string, format: date-time, description: Default now; at most 5 min in the future. }
+                actual_volume_l: { $ref: "#/components/schemas/Decimal" }
+                salt_mix: { type: [string, "null"], maxLength: 100 }
+                notes: { type: [string, "null"], maxLength: 2000 }
+      responses:
+        "200":
+          description: Completed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WaterChange" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`already_resolved` or `tank_archived`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/water-changes/{eventID}/skip:
+    parameters: [{ $ref: "#/components/parameters/WaterChangeID" }]
+    post:
+      tags: [water-changes]
+      summary: Skip a scheduled (possibly overdue) water change with a reason (owner, idempotent)
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        "200":
+          description: Skipped.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WaterChange" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`already_resolved` or `tank_archived`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
 security:
   - session: []
 
@@ -539,6 +764,12 @@ components:
       schema: { type: string }
     TankID:
       name: tankID
+      in: path
+      required: true
+      description: A malformed ID is answered like an unknown one (404).
+      schema: { type: string, format: uuid }
+    WaterChangeID:
+      name: eventID
       in: path
       required: true
       description: A malformed ID is answered like an unknown one (404).
@@ -842,3 +1073,125 @@ components:
         username: { type: [string, "null"] }
         permission: { const: viewer }
         created_at: { type: string, format: date-time }
+    WaterChangeEstimate:
+      type: object
+      required: [fraction_of_system, system_volume_l, basis, assumptions, flags]
+      description: |
+        Volume exchanged relative to the tank's estimated total system volume — not a measured
+        share of water replaced. 3 decimals, rounded half away from zero, never clamped
+        (> 1 is possible). Clients must show the assumptions and flags with it, and show
+        "< 0.1 %" when a non-zero volume rounds to 0.
+      properties:
+        fraction_of_system: { $ref: "#/components/schemas/Decimal" }
+        system_volume_l:
+          allOf: [{ $ref: "#/components/schemas/Decimal" }]
+          description: For completed changes the tank's volume at completion (history never changes); otherwise the current one.
+        basis: { enum: [actual, planned] }
+        assumptions:
+          type: array
+          items: { enum: [fraction_of_total_system, complete_mixing, system_volume_as_entered] }
+        flags:
+          type: array
+          description: "`exceeds_system_volume` (check the volume or unit), `large_change` (> 0.5: match the new water's salinity, temperature and alkalinity closely). Never blocking."
+          items: { enum: [exceeds_system_volume, large_change] }
+    RRule:
+      type: string
+      maxLength: 200
+      description: |
+        Recurrence subset: `FREQ=DAILY|WEEKLY|MONTHLY`, `INTERVAL=1..365`, `BYDAY=MO,…` (weekly),
+        `BYMONTHDAY=1..28,…` (monthly), `BYHOUR=0..23,…` (≤ 6, default 9), `BYMINUTE=0..59`.
+        Times are wall-clock in `timezone`. Stored and returned in canonical form.
+        Errors: `invalid_rrule`, `unsupported_rrule_part`.
+      examples: ["FREQ=WEEKLY;BYDAY=SU;BYHOUR=9;BYMINUTE=0"]
+    WaterChangeSchedule:
+      type: object
+      required: [id, tank_id, rrule, timezone, starts_on, ends_on, planned_volume_l, salt_mix, notes, status,
+                 next_occurrences, estimate, created_at, updated_at, version]
+      properties:
+        id: { type: string, format: uuid }
+        tank_id: { type: string, format: uuid }
+        rrule: { $ref: "#/components/schemas/RRule" }
+        timezone: { type: string }
+        starts_on: { type: string, format: date }
+        ends_on: { type: [string, "null"], format: date }
+        planned_volume_l: { $ref: "#/components/schemas/Decimal" }
+        salt_mix: { type: [string, "null"] }
+        notes: { type: [string, "null"] }
+        status: { enum: [active, paused, ended] }
+        next_occurrences: { type: array, maxItems: 3, items: { type: string, format: date-time } }
+        estimate:
+          oneOf:
+            - { $ref: "#/components/schemas/WaterChangeEstimate" }
+            - { type: "null" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        version: { type: integer }
+    WaterChangeScheduleCreate:
+      type: object
+      additionalProperties: false
+      required: [rrule, timezone, starts_on, planned_volume_l]
+      properties:
+        rrule: { $ref: "#/components/schemas/RRule" }
+        timezone: { type: string, description: IANA time zone of the wall-clock times }
+        starts_on: { type: string, format: date }
+        ends_on: { type: [string, "null"], format: date, description: Inclusive; not before starts_on. }
+        planned_volume_l: { $ref: "#/components/schemas/Decimal" }
+        salt_mix: { type: [string, "null"], maxLength: 100 }
+        notes: { type: [string, "null"], maxLength: 2000 }
+    WaterChangeSchedulePatch:
+      type: object
+      additionalProperties: false
+      required: [version]
+      properties:
+        version: { type: integer }
+        rrule: { $ref: "#/components/schemas/RRule" }
+        timezone: { type: string }
+        starts_on: { type: string, format: date }
+        ends_on: { type: [string, "null"], format: date }
+        planned_volume_l: { $ref: "#/components/schemas/Decimal" }
+        salt_mix: { type: [string, "null"], maxLength: 100 }
+        notes: { type: [string, "null"], maxLength: 2000 }
+        status: { enum: [active, paused, ended] }
+    WaterChange:
+      type: object
+      required: [id, tank_id, schedule_id, scheduled_for, planned_volume_l, status, overdue, completed_at,
+                 actual_volume_l, salt_mix, notes, skip_reason, resolved_at, estimate, created_at, updated_at, version]
+      properties:
+        id: { type: string, format: uuid }
+        tank_id: { type: string, format: uuid }
+        schedule_id: { type: [string, "null"], format: uuid }
+        scheduled_for: { type: [string, "null"], format: date-time }
+        planned_volume_l:
+          oneOf:
+            - { $ref: "#/components/schemas/Decimal" }
+            - { type: "null" }
+        status: { enum: [scheduled, completed, skipped] }
+        overdue: { type: boolean, description: "Derived: still scheduled after its grace (24 h, or half the schedule's spacing if shorter). Never auto-completed." }
+        completed_at: { type: [string, "null"], format: date-time, description: When the water was changed. }
+        actual_volume_l:
+          oneOf:
+            - { $ref: "#/components/schemas/Decimal" }
+            - { type: "null" }
+        salt_mix: { type: [string, "null"] }
+        notes: { type: [string, "null"] }
+        skip_reason: { type: [string, "null"] }
+        resolved_at: { type: [string, "null"], format: date-time, description: When the keeper completed or skipped it. }
+        estimate:
+          description: From actual_volume_l when completed, else planned_volume_l.
+          oneOf:
+            - { $ref: "#/components/schemas/WaterChangeEstimate" }
+            - { type: "null" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        version: { type: integer }
+    WaterChangeRecord:
+      type: object
+      additionalProperties: false
+      description: Exactly one of completed_at or scheduled_for.
+      properties:
+        completed_at: { type: string, format: date-time, description: At most 5 min in the future. }
+        actual_volume_l: { $ref: "#/components/schemas/Decimal" }
+        scheduled_for: { type: string, format: date-time }
+        planned_volume_l: { $ref: "#/components/schemas/Decimal" }
+        salt_mix: { type: [string, "null"], maxLength: 100 }
+        notes: { type: [string, "null"], maxLength: 2000 }

@@ -106,3 +106,22 @@ func TestJSONIsString(t *testing.T) {
 		t.Fatalf("got %s, %v", b, err)
 	}
 }
+
+func TestDivRound(t *testing.T) {
+	cases := []struct{ a, b, want string }{
+		{"10", "72", "0.139"},
+		{"25", "100", "0.25"},
+		{"2", "3", "0.667"},
+		{"1", "8", "0.125"},
+		{"0.0005", "1", "0.001"},
+	}
+	for _, c := range cases {
+		got, err := MustParse(c.a).DivRound(MustParse(c.b), 3)
+		if err != nil || got.String() != c.want {
+			t.Errorf("%s/%s = %v %v, want %s", c.a, c.b, got, err, c.want)
+		}
+	}
+	if _, err := MustParse("1").DivRound(MustParse("0"), 3); err == nil {
+		t.Fatal("division by zero must fail")
+	}
+}

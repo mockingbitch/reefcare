@@ -95,12 +95,30 @@ scheduler and can later be resolved by the user to any terminal status (recorded
 
 ### Water changes
 - **WaterChangeSchedule** — RRULE or one-time; planned volume; salt mix; targets.
-- **WaterChangeEvent** — occurrence with status (`scheduled`, `completed`, `skipped`, `overdue`
-  derived), actual volume, preparation details, pre/post test links.
+- **WaterChangeEvent** — occurrence with status (`scheduled`, `completed`, `skipped`; `overdue`
+  derived: scheduled and more than 24 h past its time), actual volume, salt, notes. Occurrences
+  are materialized 35 days ahead; editing or pausing a schedule replaces only upcoming,
+  untouched occurrences — overdue and resolved ones are history. Pre/post water-test links and
+  measured salinity/temperature come with milestone 2.2.
 
-Estimate: replaced fraction `f = actual_volume / system_volume`; after `n` equal changes with new
-water at concentration `C_new`: `C_n = C_new + (C_0 − C_new)(1 − f)^n` (assumes complete mixing and
-constant system volume — always shown with the result).
+Estimate (implemented): `f = volume / system_volume` — the volume exchanged relative to the
+estimated **total** system volume (display + sump + plumbing as entered), not a measured share
+replaced. Completed changes keep the system volume of that moment. Shown with the assumptions
+(complete mixing, volume as entered) and non-blocking flags (`f > 1`: check volume/unit;
+`f > 0.5`: match new water closely). Values above 1 are reported, not clamped.
+
+Dilution projection (not implemented; open item W5): for drain-then-refill batch changes,
+`C_n = C_new + (C_0 − C_new)(1 − f)^n`, valid for 0 ≤ f ≤ 1. It must always be presented as a
+**dilution-only projection**, with these caveats (domain review 2026-10-30):
+(a) conservative substances only — corals consume Ca/Alk/Mg, dosing adds them, nitrate and
+phosphate are produced and exported, so it is not a forecast of tank values; (b) batch changes
+only — continuous drain-and-fill follows `C = C_new + (C_0 − C_new)·e^(−V/V_sys)`; (c) `C_new`
+must be a measured value of the new water, never the salt-mix label; (d) new water at the same
+salinity and temperature; (e) constant system volume (measure after top-off); (f) equal `f`
+each time. Suggested wording: "Projection of dilution only. Assumes the water is fully mixed,
+you drain then refill, the new water is measured and matches salinity and temperature, the
+system volume is accurate, and nothing is consumed or added between changes. Actual values will
+differ — test to confirm."
 
 ### Equipment & maintenance
 - **EquipmentModel** — manufacturer + model + category + specs (shared catalog, user-extensible).

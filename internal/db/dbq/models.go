@@ -140,3 +140,42 @@ type UserSession struct {
 	UserAgent     *string
 	IpPrefix      *netip.Prefix
 }
+
+type WaterChangeEvent struct {
+	ID             uuid.UUID
+	TankID         uuid.UUID
+	ScheduleID     *uuid.UUID
+	ScheduledFor   *time.Time
+	OverdueAfter   *time.Time
+	PlannedVolumeL *decimal.Decimal
+	Status         string
+	CompletedAt    *time.Time
+	ActualVolumeL  *decimal.Decimal
+	SystemVolumeL  *decimal.Decimal
+	SaltMix        *string
+	Notes          *string
+	SkipReason     *string
+	RecordedBy     *uuid.UUID
+	ResolvedAt     *time.Time
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	Version        int32
+}
+
+type WaterChangeSchedule struct {
+	ID                uuid.UUID
+	TankID            uuid.UUID
+	Rrule             string
+	Timezone          string
+	StartsOn          time.Time
+	EndsOn            *time.Time
+	PlannedVolumeL    decimal.Decimal
+	SaltMix           *string
+	Notes             *string
+	Status            string
+	MaterializedUntil *time.Time
+	CreatedBy         *uuid.UUID
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	Version           int32
+}

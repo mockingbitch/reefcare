@@ -836,7 +836,9 @@ export interface paths {
         put?: never;
         /**
          * Archive a tank (owner; terminal, idempotent)
-         * @description Archived tanks stay readable but can no longer change. Records `tank.archived` on the timeline.
+         * @description Archived tanks stay readable but can no longer change. Records `tank.archived` on the
+         *     timeline. Water-change schedules end, upcoming occurrences are removed and changes still
+         *     open (including overdue ones) are resolved as skipped with reason code `tank_archived`.
          */
         post: {
             parameters: {
@@ -1037,6 +1039,424 @@ export interface paths {
                 429: components["responses"]["RateLimited"];
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tanks/{tankID}/water-change-schedules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                tankID: components["parameters"]["TankID"];
+            };
+            cookie?: never;
+        };
+        /** List the tank's water-change schedules (owner or viewer) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    tankID: components["parameters"]["TankID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description All schedules of the tank, oldest first (never paginated). */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: components["schemas"]["WaterChangeSchedule"][];
+                            next_cursor: null;
+                        };
+                    };
+                };
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        /**
+         * Create a recurring water-change schedule (owner)
+         * @description Occurrences are created up to 35 days ahead at once and kept ahead by an hourly job;
+         *     a new schedule never starts with overdue occurrences.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    tankID: components["parameters"]["TankID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WaterChangeScheduleCreate"];
+                };
+            };
+            responses: {
+                /** @description Created. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["WaterChangeSchedule"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `tank_archived` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                422: components["responses"]["Unprocessable"];
+                429: components["responses"]["RateLimited"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/water-change-schedules/{scheduleID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scheduleID: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit, pause, resume or end a schedule (owner, merge patch, `version` required)
+         * @description Changes to timing, volume, salt or status replace the upcoming occurrences nobody acted
+         *     on. Overdue and resolved occurrences are history and stay. `ended` is terminal.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path: {
+                    scheduleID: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WaterChangeSchedulePatch"];
+                };
+            };
+            responses: {
+                /** @description Updated. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["WaterChangeSchedule"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `version_conflict`, `schedule_ended` or `tank_archived` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                422: components["responses"]["Unprocessable"];
+                429: components["responses"]["RateLimited"];
+            };
+        };
+        trace?: never;
+    };
+    "/api/v1/tanks/{tankID}/water-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                tankID: components["parameters"]["TankID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List water changes, newest event time first (owner or viewer)
+         * @description Event time is `completed_at` for done changes, otherwise `scheduled_for`. A scheduled
+         *     change past its grace (24 h, or half the schedule's spacing if shorter) is returned with
+         *     `overdue: true` until the keeper completes or skips it. Field errors include
+         *     `out_of_range` (before 2000-01-01) and `in_future`.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Comma-separated subset of `overdue`, `scheduled` (upcoming, not overdue), `completed`, `skipped`. Default all. */
+                    status?: string;
+                    /** @description Event time ≥ (RFC 3339) */
+                    from?: string;
+                    /** @description Event time < (RFC 3339) */
+                    to?: string;
+                    limit?: components["parameters"]["Limit"];
+                    /** @description Opaque `next_cursor` from the previous page. */
+                    cursor?: components["parameters"]["Cursor"];
+                };
+                header?: never;
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    tankID: components["parameters"]["TankID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A page of water changes. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: components["schemas"]["WaterChange"][];
+                            next_cursor: string | null;
+                        };
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        /**
+         * Record a water change done without a schedule, or plan a one-time change (owner)
+         * @description Exactly one of `completed_at` (done; `actual_volume_l` required; added to the timeline) or `scheduled_for` (planned; `planned_volume_l` required).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    tankID: components["parameters"]["TankID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WaterChangeRecord"];
+                };
+            };
+            responses: {
+                /** @description Created. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["WaterChange"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `tank_archived` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                422: components["responses"]["Unprocessable"];
+                429: components["responses"]["RateLimited"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/water-changes/{eventID}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                eventID: components["parameters"]["WaterChangeID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete a scheduled (possibly overdue) water change (owner, idempotent)
+         * @description Repeating the same completion returns 200 with the stored change; a different completion or a skip after resolution is 409 `already_resolved`. Adds `water_change.completed` to the timeline.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    eventID: components["parameters"]["WaterChangeID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /**
+                         * Format: date-time
+                         * @description Default now; at most 5 min in the future.
+                         */
+                        completed_at?: string;
+                        actual_volume_l: components["schemas"]["Decimal"];
+                        salt_mix?: string | null;
+                        notes?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Completed. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["WaterChange"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `already_resolved` or `tank_archived` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                422: components["responses"]["Unprocessable"];
+                429: components["responses"]["RateLimited"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/water-changes/{eventID}/skip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                eventID: components["parameters"]["WaterChangeID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Skip a scheduled (possibly overdue) water change with a reason (owner, idempotent) */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    eventID: components["parameters"]["WaterChangeID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        reason: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Skipped. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["WaterChange"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `already_resolved` or `tank_archived` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                422: components["responses"]["Unprocessable"];
+                429: components["responses"]["RateLimited"];
+            };
+        };
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1271,6 +1691,133 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
+        /**
+         * @description Volume exchanged relative to the tank's estimated total system volume — not a measured
+         *     share of water replaced. 3 decimals, rounded half away from zero, never clamped
+         *     (> 1 is possible). Clients must show the assumptions and flags with it, and show
+         *     "< 0.1 %" when a non-zero volume rounds to 0.
+         */
+        WaterChangeEstimate: {
+            fraction_of_system: components["schemas"]["Decimal"];
+            /** @description For completed changes the tank's volume at completion (history never changes); otherwise the current one. */
+            system_volume_l: components["schemas"]["Decimal"];
+            /** @enum {unknown} */
+            basis: "actual" | "planned";
+            assumptions: ("fraction_of_total_system" | "complete_mixing" | "system_volume_as_entered")[];
+            /** @description `exceeds_system_volume` (check the volume or unit), `large_change` (> 0.5: match the new water's salinity, temperature and alkalinity closely). Never blocking. */
+            flags: ("exceeds_system_volume" | "large_change")[];
+        };
+        /**
+         * @description Recurrence subset: `FREQ=DAILY|WEEKLY|MONTHLY`, `INTERVAL=1..365`, `BYDAY=MO,…` (weekly),
+         *     `BYMONTHDAY=1..28,…` (monthly), `BYHOUR=0..23,…` (≤ 6, default 9), `BYMINUTE=0..59`.
+         *     Times are wall-clock in `timezone`. Stored and returned in canonical form.
+         *     Errors: `invalid_rrule`, `unsupported_rrule_part`.
+         * @example FREQ=WEEKLY;BYDAY=SU;BYHOUR=9;BYMINUTE=0
+         */
+        RRule: string;
+        WaterChangeSchedule: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tank_id: string;
+            rrule: components["schemas"]["RRule"];
+            timezone: string;
+            /** Format: date */
+            starts_on: string;
+            /** Format: date */
+            ends_on: string | null;
+            planned_volume_l: components["schemas"]["Decimal"];
+            salt_mix: string | null;
+            notes: string | null;
+            /** @enum {unknown} */
+            status: "active" | "paused" | "ended";
+            next_occurrences: string[];
+            estimate: components["schemas"]["WaterChangeEstimate"] | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            version: number;
+        };
+        WaterChangeScheduleCreate: {
+            rrule: components["schemas"]["RRule"];
+            /** @description IANA time zone of the wall-clock times */
+            timezone: string;
+            /** Format: date */
+            starts_on: string;
+            /**
+             * Format: date
+             * @description Inclusive; not before starts_on.
+             */
+            ends_on?: string | null;
+            planned_volume_l: components["schemas"]["Decimal"];
+            salt_mix?: string | null;
+            notes?: string | null;
+        };
+        WaterChangeSchedulePatch: {
+            version: number;
+            rrule?: components["schemas"]["RRule"];
+            timezone?: string;
+            /** Format: date */
+            starts_on?: string;
+            /** Format: date */
+            ends_on?: string | null;
+            planned_volume_l?: components["schemas"]["Decimal"];
+            salt_mix?: string | null;
+            notes?: string | null;
+            /** @enum {unknown} */
+            status?: "active" | "paused" | "ended";
+        };
+        WaterChange: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tank_id: string;
+            /** Format: uuid */
+            schedule_id: string | null;
+            /** Format: date-time */
+            scheduled_for: string | null;
+            planned_volume_l: components["schemas"]["Decimal"] | null;
+            /** @enum {unknown} */
+            status: "scheduled" | "completed" | "skipped";
+            /** @description Derived: still scheduled after its grace (24 h, or half the schedule's spacing if shorter). Never auto-completed. */
+            overdue: boolean;
+            /**
+             * Format: date-time
+             * @description When the water was changed.
+             */
+            completed_at: string | null;
+            actual_volume_l: components["schemas"]["Decimal"] | null;
+            salt_mix: string | null;
+            notes: string | null;
+            skip_reason: string | null;
+            /**
+             * Format: date-time
+             * @description When the keeper completed or skipped it.
+             */
+            resolved_at: string | null;
+            /** @description From actual_volume_l when completed, else planned_volume_l. */
+            estimate: components["schemas"]["WaterChangeEstimate"] | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            version: number;
+        };
+        /** @description Exactly one of completed_at or scheduled_for. */
+        WaterChangeRecord: {
+            /**
+             * Format: date-time
+             * @description At most 5 min in the future.
+             */
+            completed_at?: string;
+            actual_volume_l?: components["schemas"]["Decimal"];
+            /** Format: date-time */
+            scheduled_for?: string;
+            planned_volume_l?: components["schemas"]["Decimal"];
+            salt_mix?: string | null;
+            notes?: string | null;
+        };
     };
     responses: {
         /** @description Accepted. */
@@ -1353,6 +1900,8 @@ export interface components {
         CSRF: string;
         /** @description A malformed ID is answered like an unknown one (404). */
         TankID: string;
+        /** @description A malformed ID is answered like an unknown one (404). */
+        WaterChangeID: string;
         Limit: number;
         /** @description Opaque `next_cursor` from the previous page. */
         Cursor: string;

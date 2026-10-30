@@ -366,6 +366,12 @@ CREATE UNIQUE INDEX dosing_occurrence_unique ON dosing_events (plan_id, schedule
 CREATE INDEX ON dosing_events (tank_id, coalesce(executed_at, scheduled_for) DESC);
 CREATE INDEX dosing_due ON dosing_events (scheduled_for) WHERE status = 'scheduled';
 
+-- Implemented in db/migrations/00006_water_changes.sql (milestone 2.5) with: statuses
+-- scheduled|completed|skipped ('cancelled' dropped: edits delete only upcoming rows),
+-- resolved_at (when the keeper acted) separate from completed_at (when the water was
+-- changed), skip_reason required for skipped, recorded_by/created_by. Salinity and
+-- temperature fields and pre/post water-test links wait for 2.1/2.2 (they need the
+-- parameter catalog's units).
 -- water_change_schedules / water_change_events: same shape as dosing plans/events
 --   (rrule, timezone, planned_volume_l; events: scheduled_for, status scheduled|completed|skipped|cancelled,
 --    actual_volume_l, salt_mix, target_/measured_salinity, target_/measured_temp_c, prep_notes,

@@ -54,6 +54,20 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 | J9 | `erase_due` pagination beyond one batch (500) has no test | P3 | Keyset pagination on `(deactivated_at, id)` replaced the loop that could spin; a test needs an injectable batch size |
 | J10 | Index changes on large tables | P3 | 00005 builds indexes in its transaction (fine pre-launch). From launch on, `CREATE INDEX CONCURRENTLY` in a separate non-transactional migration |
 
+## 3b. Water changes (milestone 2.5 done)
+
+| # | Item | Priority | Notes |
+|---|---|---|---|
+| W1 | Measured salinity/temperature and pre/post water-test links on water changes | P2 | Need the parameter catalog and units (2.1/2.2, decision D5) |
+| W2 | Water-change reminders (in-app/email) | P2 | Milestone 2.9; overdue is already derivable |
+| W3 | Web screens for schedules and water changes | P2 | Milestone 2.10 (API and generated types are ready) |
+| W4 | `Idempotency-Key` header for retried creates (`POST /tanks/{id}/water-changes`) | P3 | Complete/skip are naturally idempotent; a retried POST of a one-off change can create a duplicate. Build the shared `idempotency_keys` table with dosing (2.4) |
+| W5 | Dilution projection after n changes (docs/domain-model.md, with its caveats) | P3 | Needs measured new-water values (2.2), exact decimal powers, a batch/continuous `method` field, and D5 review |
+| W6 | UI requirements from the domain review (for 2.10) | P2 | Show "monthly on the 28th" when a start on the 29th–31st is capped; show the next 3 dates before saving a schedule; use `next_occurrences` (not materialized rows) for "next change" when the interval exceeds 35 days; "< 0.1 %" for tiny fractions; overdue wording calm ("complete or skip when you can"); prompt (optional) to record new-water salinity and temperature on completion |
+| W7 | "Skip all overdue" with one reason | P3 | Several missed weekly changes otherwise need one skip each |
+| W8 | Ordinal weekdays (`BYDAY=1SA`, "first Saturday") and "last day of month" | P3 | Rejected today with `invalid_rrule`; common enough to add with `BYSETPOS` |
+| W9 | Gallon input | P3 | Volumes are litres only. If gallons are accepted, store the original value and unit and convert explicitly (US 3.785411784 L, Imperial 4.54609 L — never guess which) |
+
 ## 4. Security and identity follow-ups
 
 | # | Item | Priority | Source | Notes |

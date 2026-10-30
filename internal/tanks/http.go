@@ -29,8 +29,10 @@ func NewHandler(svc *Service, requireAuth func(http.Handler) http.Handler, log *
 	return &Handler{svc: svc, auth: requireAuth, log: log}
 }
 
-// Mount registers the tank routes.
-func (h *Handler) Mount(r chi.Router) {
+// Mount registers the tank routes. Each sub mounts a tank-owned module's routes under
+// /tanks/{tankID} (authentication applied); the module still authorizes every request
+// through Authorizer.
+func (h *Handler) Mount(r chi.Router, subs ...func(chi.Router)) {
 	r.Route("/tanks", func(r chi.Router) {
 		r.Use(h.auth)
 		r.Get("/", h.list)
@@ -42,9 +44,15 @@ func (h *Handler) Mount(r chi.Router) {
 			r.Get("/shares", h.listShares)
 			r.Post("/shares", h.grant)
 			r.Delete("/shares/{userID}", h.revoke)
+			for _, sub := range subs {
+				sub(r)
+			}
 		})
 	})
 }
+
+// ActorFrom builds the Actor of an authenticated request, for tank-owned modules.
+func ActorFrom(r *http.Request) Actor { return actor(r) }
 
 func actor(r *http.Request) Actor {
 	p, _ := identity.PrincipalFrom(r.Context())
@@ -54,6 +62,9 @@ func actor(r *http.Request) Actor {
 		Origin: audit.Origin{RequestID: httpserver.RequestIDFrom(r.Context()), IPPrefix: httpserver.TruncatedIP(ip), UserAgent: r.UserAgent()},
 	}
 }
+
+// PathID parses a UUID path parameter; malformed IDs are 404 like unknown ones.
+func PathID(r *http.Request, name string) (uuid.UUID, error) { return pathID(r, name) }
 
 // pathID parses a UUID path parameter. A malformed ID is reported as 404, like any
 // tank the caller cannot see.

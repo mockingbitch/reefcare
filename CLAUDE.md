@@ -34,8 +34,11 @@ Designer. Detailed, path-scoped rules live in `.claude/rules/` and load automati
   complete.**
 - Active phase: **Phase 2 — Reef management.** 2.3 job runner is done (`internal/platform/jobs`;
   identity emails, failed-login audits, purges and 30-day account erasure run as jobs; modules
-  register account erasers with `identity.Service.OnErase`). Next: 2.1 parameter catalog + unit
-  conversion (needs the D5 domain reviewer) or 2.4+ in roadmap order.
+  register account erasers with `identity.Service.OnErase`). 2.5 water changes is done
+  (`internal/waterchanges`, shared recurrence subset in `internal/platform/recurrence`; tank-owned
+  modules mount under `/tanks/{tankID}` via `tanks.Handler.Mount(api, subs...)` and authorize with
+  `tanks.Authorizer`). Next: 2.4 dosing (reuses recurrence/materialization) or 2.1 once the D5
+  domain reviewer is named.
 - Unfinished work, known gaps and pending decisions are tracked in `docs/open-items.md`;
   update it when an item is completed or a new gap is found.
 - Go module path is `reefcare`. Migrations use sequential numbering (`make migration name=...`).
