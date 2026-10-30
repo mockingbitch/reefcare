@@ -21,7 +21,10 @@ test('livestock: add, events, a blocked negative count and reconciliation', asyn
 	await page.getByLabel(t.field_display_volume, { exact: true }).fill('60');
 	await page.getByLabel(t.field_system_volume, { exact: true }).fill('72');
 	await page.getByRole('button', { name: t.tank_create_submit }).click();
-	await page.getByRole('link', { name: t.ls_title }).click();
+	await page
+		.getByRole('navigation', { name: t.tank_sections })
+		.getByRole('link', { name: t.ls_title })
+		.click();
 	await expect(page.getByText(t.ls_empty)).toBeVisible();
 
 	// Add a private species from the form, then two fish of it.

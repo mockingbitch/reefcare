@@ -5,6 +5,7 @@
 	import { api, type ApiError, type Tank } from '#lib/api/client.js';
 	import Alert from '#lib/components/Alert.svelte';
 	import ConfirmDialog from '#lib/components/ConfirmDialog.svelte';
+	import TankDashboard from '#lib/components/TankDashboard.svelte';
 	import { errorMessage } from '#lib/errors.js';
 	import { formatDate, formatDateTime, formatDecimal } from '#lib/format.js';
 	import { statusLabel, tankTypeLabel } from '#lib/labels.js';
@@ -90,6 +91,8 @@
 		<Alert kind="info">{m.viewer_notice()}</Alert>
 	{/if}
 	{#if actionError}<Alert kind="error">{errorMessage(actionError)}</Alert>{/if}
+
+	<TankDashboard tankId={tank.id} timeZone={tz ?? 'Asia/Ho_Chi_Minh'} />
 
 	<section class="card" aria-labelledby="volumes">
 		<h2 id="volumes">{m.tank_volumes()}</h2>

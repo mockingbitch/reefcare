@@ -21,7 +21,10 @@ test('devices, configuration versions and maintenance', async ({ page }) => {
 	await page.getByLabel(t.field_display_volume, { exact: true }).fill('120');
 	await page.getByLabel(t.field_system_volume, { exact: true }).fill('150');
 	await page.getByRole('button', { name: t.tank_create_submit }).click();
-	await page.getByRole('link', { name: t.eq_title, exact: true }).click();
+	await page
+		.getByRole('navigation', { name: t.tank_sections })
+		.getByRole('link', { name: t.eq_title, exact: true })
+		.click();
 	await expect(page.getByText(t.eq_empty)).toBeVisible();
 
 	// Add a light; the device page opens.

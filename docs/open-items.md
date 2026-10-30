@@ -2,8 +2,9 @@
 
 Last updated: 2026-10-31 · State: Phase 1 done; Phase 2 backend done except 2.1/2.2 (waiting
 on D5): 2.3–2.9 committed on branch `phase-1-foundation`. 2.10 web in progress: water-change
-(2dc0b29), dosing (321ab17), equipment & maintenance (ed1d76d), livestock (bea468b) and
-notification screens done; the tank dashboard remains.
+(2dc0b29), dosing (321ab17), equipment & maintenance (ed1d76d), livestock (bea468b),
+notifications (d4d5baa) and the tank dashboard are done. 2.1/2.2 (parameter catalog and water
+tests) in progress with provisional values pending D5.
 
 Everything below is known to be **not done**, **partially done**, or **waiting on a decision**.
 Sources: the design docs, the db-architect / go-reviewer / security-auditor reviews, and
@@ -18,7 +19,7 @@ F1 profile (`PATCH`/`DELETE /me`) · F2 tanks, shares, `tanks.Authorizer`, timel
 cross-user 404 suite · F3 CI workflow + Renovate · F5 `api/openapi.yaml` with a route-sync test ·
 F6 general write limit · F7 Prometheus metrics · S3 tokens bound to their email · S6 logout-all ·
 P2 serializable retry · P3 field-level errors for custom JSON types (incl. nested and miscased
-members) · R3 `/new-migration` skill · R5 Go installed locally · F4 web shell (`web/`, accepted
+members) · R3 `/new-migration` skill · R5 Go installed locally on the Linux dev machine (not on the macOS one; the Makefile falls back to the `golang:1.27` container) · F4 web shell (`web/`, accepted
 proposal in [frontend.md](frontend.md); unit, component and Playwright e2e tests with axe) ·
 R6 scratch database removed · R2 `.env.example` added (deny rules in `.claude/settings.json` narrowed to real env files) ·
 2.3 job queue with J1 durable email, J2 durable identity background work, J3 session/token purge,
@@ -40,11 +41,12 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 
 | # | Item | Priority | Notes |
 |---|---|---|---|
-| F8 | CI has never run on GitHub | P1 | `.github/workflows/ci.yml` (jobs go, web, e2e, docker) passes `actionlint` and every step passes locally, but there is no remote repository yet (see R4). Actions are pinned to commit SHAs |
+| F8 | CI has never run on GitHub | P1 | `.github/workflows/ci.yml` (jobs go, web, e2e, docker) passes `actionlint` and every step passes locally; the GitHub remote exists and the branch is pushed, but no run has been checked yet (needs a PR, R1). Actions are pinned to commit SHAs |
 | F9 | Serve the web build in production | P2 | `web/build` is a static SPA (`200.html` fallback); Caddy must serve it and proxy `/api`, `/healthz`, `/readyz` on the same origin, and add the response headers (part of L4). Until then the app can be framed: `frame-ancestors 'none'` cannot go in a meta CSP (web security review L1). Add a CI check that asserts the headers on the served `200.html` |
 | F11 | Sign-out does not reach other open tabs | P3 | Other tabs show the user until their next API call returns 401 (web security review L4). Use a `BroadcastChannel` signal |
 | F10 | Dev-only npm advisories | P3 | `npm audit` reports 4 low-severity issues in `deepmerge` via `@sveltejs/vite-plugin-svelte` (build tooling only); `npm audit --omit=dev` is clean and runs in CI. Wait for the upstream fix |
 | F12 | SvelteKit's route announcer sets an inline style the CSP blocks | P3 | Console error on navigation (`style-src 'self'`); harmless for users, but noisy. Allow its hash in `kit.csp` or hide the announcer with a class |
+| F13 | The tank dashboard makes 8 requests | P3 | Each block loads on its own (`TankDashboard.svelte`). docs/api-guidelines.md planned `GET /tanks/{id}/dashboard` for one round trip; add it if the page feels slow on mobile networks |
 
 ## 3. Background jobs (milestone 2.3 done)
 
@@ -161,7 +163,7 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 | R7 | `.claude/settings.json` hooks call `/home/feng/.local/bin/graphify`, an absolute path from one machine | P2 | On other machines (e.g. macOS) the hook command does not exist; the hooks fail on every Bash/Grep/Read/Glob call (non-blocking, but noisy and not doing their job) | Install graphify on every dev machine and call it via `PATH` or `$CLAUDE_PROJECT_DIR`, or move these hooks to each developer's `.claude/settings.local.json` |
 | R8 | E2E without local Go | P3 | `web/playwright.config.ts` now accepts `E2E_API_URL` to use an API that is already running (e.g. in Docker) instead of `go run` | Documented in web/README.md |
 | R9 | E2E registration budget | P3 | Registration allows 5 per hour per IP and all e2e traffic shares one address. Module tests now share one account from `web/e2e/global-setup.ts` (3 sign-ups per run). Two local runs within an hour against the same API still hit the limit: restart the API to clear its in-memory limiter |
-| R4 | Go module path is `reefcare`; no remote repository | P3 | — | Rename to `github.com/<org>/reefcare` once it exists |
+| R4 | Go module path is `reefcare` | P3 | The remote is github.com/mockingbitch/reefcare | Rename the module path to it when convenient (touches every import) |
 
 ## 7. Open product and infrastructure decisions
 
@@ -172,6 +174,6 @@ Accepted with defaults on 2026-10-29, but these still need a concrete owner or c
 | D5 | Who reviews thresholds and seed knowledge | — (unassigned) | Phase 3 |
 | D6 | Production email provider (SES, Postmark, other SMTP) | Mailpit locally | Before staging |
 | D7 | Hosting and managed PostgreSQL | Single VPS + managed PG, Singapore | Before staging |
-| D9 | CI platform and dependency bot | GitHub Actions + Renovate (configured) | Needs the remote (R4) |
+| D9 | CI platform and dependency bot | GitHub Actions + Renovate (configured) | First run with the PR (R1) |
 | D11 | Chart library | ECharts, confirm in a spike | Milestone 2.10 |
 | — | Local S3-compatible storage (MinIO's status is uncertain; Garage or SeaweedFS) | Not chosen | When media ships (Phase 2.7 / 4) |

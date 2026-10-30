@@ -56,7 +56,8 @@ Designer. Detailed, path-scoped rules live in `.claude/rules/` and load automati
   Livestock done (`.../livestock/`, `#lib/livestock.js`). E2E module tests share one account
   from `web/e2e/global-setup.ts` (registration is rate limited per IP).
   Notifications done (`/notifications`, `#lib/notifications.js`, unread count in
-  `#lib/unread.svelte.js`). Next in 2.10: tank dashboard; 2.1/2.2 once the D5 domain
+  `#lib/unread.svelte.js`). Tank dashboard done (`TankDashboard.svelte`, `#lib/timeline.js`);
+  2.10 is complete except water-parameter charts, which come with 2.2. Next: 2.1/2.2 2.1/2.2 once the D5 domain
   reviewer is named.
 - Unfinished work, known gaps and pending decisions are tracked in `docs/open-items.md`;
   update it when an item is completed or a new gap is found.

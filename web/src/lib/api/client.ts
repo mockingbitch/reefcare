@@ -37,6 +37,7 @@ export type LivestockEntryCreate = Schemas['LivestockEntryCreate'];
 export type LivestockEntryPatch = Schemas['LivestockEntryPatch'];
 export type LivestockEvent = Schemas['LivestockEvent'];
 export type Notification = Schemas['Notification'];
+export type TimelineEvent = Schemas['TimelineEvent'];
 export type Page<T> = { items: T[]; next_cursor: string | null };
 
 export type ErrorDetail = { field?: string; code: string; params?: Record<string, string> };
