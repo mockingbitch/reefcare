@@ -188,3 +188,16 @@ UPDATE water_change_events
 SET status = 'skipped', skip_reason = 'tank_archived', recorded_by = @recorded_by,
     resolved_at = sqlc.arg(now)::timestamptz, updated_at = sqlc.arg(now)::timestamptz, version = version + 1
 WHERE tank_id = @tank_id AND status = 'scheduled';
+
+-- name: ListWaterChangesForReminders :many
+-- Reminder source: scheduled changes whose overdue_after is in [since, until) (recently
+-- overdue, or due soon), keyset on (overdue_after, id).
+SELECT e.id, e.tank_id, t.owner_id, t.name AS tank_name, e.scheduled_for::timestamptz AS scheduled_for,
+       e.overdue_after::timestamptz AS overdue_after, e.planned_volume_l
+FROM water_change_events e
+JOIN tanks t ON t.id = e.tank_id
+WHERE e.status = 'scheduled' AND t.status <> 'archived'
+  AND e.overdue_after >= sqlc.arg(since)::timestamptz AND e.overdue_after < sqlc.arg(until)::timestamptz
+  AND (e.overdue_after, e.id) > (sqlc.arg(after_at)::timestamptz, sqlc.arg(after_id)::uuid)
+ORDER BY e.overdue_after, e.id
+LIMIT @batch;

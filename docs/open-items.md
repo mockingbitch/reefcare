@@ -107,6 +107,20 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 | LS8 | Frag lineage (`parent_entry_id`) and approximate counts | P3 | From the domain review; also coral size / tissue extent later |
 | LS9 | Search depends on the database locale for `lower()` of Vietnamese | P3 | Works with en_US.utf8; pin the production locale or solve with LS4 |
 
+## 3f. Notifications (milestone 2.9 done)
+
+| # | Item | Priority | Notes |
+|---|---|---|---|
+| NT1 | Reminders for stale measurements, threshold breaches and new assessments | P2 | Need 2.1/2.2 (water tests) and Phase 3; add sources then |
+| NT2 | Upcoming-dose reminders | P3 | Not built: one per dose would be noisy; consider a daily "today's doses" summary |
+| NT3 | Daily digest email (`email_digest`) and assessment email (`email_assessments`) | P3 | Keys reserved; only `email_reminders` is delivered |
+| NT4 | Email provider for production | P1 | Decision D6; dev uses Mailpit. Add List-Unsubscribe and a one-click opt-out link |
+| NT5 | Web notification centre and settings | P2 | Milestone 2.10 |
+| NT6 | Reminders for viewers of shared tanks | P3 | Owner only today |
+| NT7 | Scan cost | P3 | Each scan re-emits the whole window (≤ 7 days) and inserts row by row (ON CONFLICT no-op); batch with `unnest` or anti-join on dedupe keys if scan time grows |
+| NT8 | First deploy sends one backlog email | P3 | `email_reminders` was settable before delivery existed; the first scan emails up to 7 days of overdue items once (counts only). Accepted: no production users yet |
+| NT9 | One-click unsubscribe | P2 | With NT4: `List-Unsubscribe` + signed token turning `email_reminders` off without login |
+
 ## 4. Security and identity follow-ups
 
 | # | Item | Priority | Source | Notes |

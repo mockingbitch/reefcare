@@ -697,6 +697,74 @@ func (q *Queries) ListMaintenanceEvents(ctx context.Context, arg ListMaintenance
 	return items, nil
 }
 
+const listMaintenanceForReminders = `-- name: ListMaintenanceForReminders :many
+SELECT p.id, p.tank_id, t.owner_id, t.name AS tank_name, p.title, p.timezone, p.next_due_on, e.name AS equipment_name
+FROM maintenance_plans p
+JOIN tanks t ON t.id = p.tank_id
+LEFT JOIN tank_equipment e ON e.id = p.equipment_id
+WHERE p.active AND t.status <> 'archived'
+  AND p.next_due_on >= $1::date AND p.next_due_on <= $2::date
+  AND (p.next_due_on, p.id) > ($3::date, $4::uuid)
+ORDER BY p.next_due_on, p.id
+LIMIT $5
+`
+
+type ListMaintenanceForRemindersParams struct {
+	Since   time.Time
+	Until   time.Time
+	AfterOn time.Time
+	AfterID uuid.UUID
+	Batch   int32
+}
+
+type ListMaintenanceForRemindersRow struct {
+	ID            uuid.UUID
+	TankID        uuid.UUID
+	OwnerID       uuid.UUID
+	TankName      string
+	Title         string
+	Timezone      string
+	NextDueOn     time.Time
+	EquipmentName *string
+}
+
+// Reminder source: active plans due in [since, until] (dates; the service applies each
+// plan's zone), keyset on (next_due_on, id).
+func (q *Queries) ListMaintenanceForReminders(ctx context.Context, arg ListMaintenanceForRemindersParams) ([]ListMaintenanceForRemindersRow, error) {
+	rows, err := q.db.Query(ctx, listMaintenanceForReminders,
+		arg.Since,
+		arg.Until,
+		arg.AfterOn,
+		arg.AfterID,
+		arg.Batch,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMaintenanceForRemindersRow{}
+	for rows.Next() {
+		var i ListMaintenanceForRemindersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TankID,
+			&i.OwnerID,
+			&i.TankName,
+			&i.Title,
+			&i.Timezone,
+			&i.NextDueOn,
+			&i.EquipmentName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMaintenancePlans = `-- name: ListMaintenancePlans :many
 SELECT p.id, p.tank_id, p.equipment_id, e.name AS equipment_name, p.title, p.interval_days, p.timezone, p.starts_on,
        p.last_performed_at, p.next_due_on, p.active, p.notes, p.created_at, p.updated_at, p.version

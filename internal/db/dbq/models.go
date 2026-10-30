@@ -193,6 +193,21 @@ type MaintenancePlan struct {
 	Version         int32
 }
 
+type Notification struct {
+	ID          uuid.UUID
+	UserID      uuid.UUID
+	TankID      *uuid.UUID
+	Category    string
+	Kind        string
+	DedupeKey   string
+	Payload     json.RawMessage
+	OccurredAt  time.Time
+	ReadAt      *time.Time
+	EmailStatus *string
+	EmailedAt   *time.Time
+	CreatedAt   time.Time
+}
+
 type Species struct {
 	ID             uuid.UUID
 	OwnerID        *uuid.UUID

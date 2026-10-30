@@ -715,6 +715,79 @@ func (q *Queries) ListDosingProducts(ctx context.Context, userID *uuid.UUID) ([]
 	return items, nil
 }
 
+const listMissedDosesForReminders = `-- name: ListMissedDosesForReminders :many
+SELECT e.id, e.tank_id, t.owner_id, t.name AS tank_name, d.name AS product_name, e.scheduled_for::timestamptz AS scheduled_for,
+       e.planned_amount, e.amount_unit, e.missed_at::timestamptz AS missed_at
+FROM dosing_events e
+JOIN tanks t ON t.id = e.tank_id
+JOIN dosing_products d ON d.id = e.product_id
+WHERE e.status = 'missed' AND t.status <> 'archived'
+  AND e.missed_at >= $1::timestamptz AND e.missed_at < $2::timestamptz
+  AND e.scheduled_for >= $1::timestamptz
+  AND (e.missed_at, e.id) > ($3::timestamptz, $4::uuid)
+ORDER BY e.missed_at, e.id
+LIMIT $5
+`
+
+type ListMissedDosesForRemindersParams struct {
+	Since   time.Time
+	Until   time.Time
+	AfterAt time.Time
+	AfterID uuid.UUID
+	Batch   int32
+}
+
+type ListMissedDosesForRemindersRow struct {
+	ID            uuid.UUID
+	TankID        uuid.UUID
+	OwnerID       uuid.UUID
+	TankName      string
+	ProductName   string
+	ScheduledFor  time.Time
+	PlannedAmount *decimal.Decimal
+	AmountUnit    string
+	MissedAt      time.Time
+}
+
+// Reminder source: doses marked missed in [since, until) that were also due since then (after
+// an outage the catch-up marks old doses missed now; they are not reminded), keyset on
+// (missed_at, id).
+func (q *Queries) ListMissedDosesForReminders(ctx context.Context, arg ListMissedDosesForRemindersParams) ([]ListMissedDosesForRemindersRow, error) {
+	rows, err := q.db.Query(ctx, listMissedDosesForReminders,
+		arg.Since,
+		arg.Until,
+		arg.AfterAt,
+		arg.AfterID,
+		arg.Batch,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMissedDosesForRemindersRow{}
+	for rows.Next() {
+		var i ListMissedDosesForRemindersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TankID,
+			&i.OwnerID,
+			&i.TankName,
+			&i.ProductName,
+			&i.ScheduledFor,
+			&i.PlannedAmount,
+			&i.AmountUnit,
+			&i.MissedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockDosingEvent = `-- name: LockDosingEvent :one
 SELECT id, tank_id, plan_id, status, planned_amount, actual_amount, amount_unit, executed_at, reason, notes,
        scheduled_for, missed_after

@@ -3422,6 +3422,184 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Your notifications, newest first
+         * @description Reminders created by a scan every 15 minutes: missed doses, water changes coming up
+         *     (within a day) or overdue, maintenance due today or overdue — once per occurrence.
+         *     Only the tank owner is reminded. Clients localize by `kind` with `payload`; unknown
+         *     kinds should render generically. Read notifications are kept 90 days, others 180.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    unread?: boolean;
+                    limit?: components["parameters"]["Limit"];
+                    /** @description Opaque `next_cursor` from the previous page. */
+                    cursor?: components["parameters"]["Cursor"];
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A page of notifications. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: components["schemas"]["Notification"][];
+                            next_cursor: string | null;
+                        };
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/unread-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How many notifications are unread (capped at 100) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            count: number;
+                            /** @description True when there are 100 or more (show "99+"). */
+                            capped: boolean;
+                        };
+                    };
+                };
+                401: components["responses"]["Unauthenticated"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/read-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark every notification read */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Done. */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/{notificationID}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Another user's (or a malformed) ID is answered like an unknown one (404). */
+                notificationID: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark one notification read (idempotent) */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path: {
+                    /** @description Another user's (or a malformed) ID is answered like an unknown one (404). */
+                    notificationID: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Done. */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3499,11 +3677,18 @@ export interface components {
             /** @enum {unknown} */
             salinity?: "SG" | "ppt";
         };
-        /** @description Opt-in email channels. Security emails cannot be turned off. */
+        /**
+         * @description `email_*`: opt-in email channels (default off; email needs a verified address).
+         *     `reminders_<category>`: in-app reminders per category (default on). Security emails
+         *     cannot be turned off. `email_assessments` and `email_digest` are reserved.
+         */
         NotificationPrefs: {
             email_reminders?: boolean;
             email_assessments?: boolean;
             email_digest?: boolean;
+            reminders_dosing?: boolean;
+            reminders_water_change?: boolean;
+            reminders_maintenance?: boolean;
         };
         User: {
             /** Format: uuid */
@@ -3552,6 +3737,9 @@ export interface components {
                 email_reminders?: boolean | null;
                 email_assessments?: boolean | null;
                 email_digest?: boolean | null;
+                reminders_dosing?: boolean | null;
+                reminders_water_change?: boolean | null;
+                reminders_maintenance?: boolean | null;
             } | null;
         };
         /** @enum {unknown} */
@@ -4216,6 +4404,33 @@ export interface components {
             summary: {
                 [key: string]: unknown;
             };
+        };
+        Notification: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tank_id: string | null;
+            /** @enum {unknown} */
+            category: "dosing" | "water_change" | "maintenance";
+            /** @description `dosing.missed`, `water_change.upcoming`, `water_change.overdue`, `maintenance.due`, `maintenance.overdue`; new kinds may appear. */
+            kind: string;
+            /**
+             * @description Render-ready parameters, e.g. `tank_name`, `product_name`, `amount`, `unit`,
+             *     `scheduled_for` (UTC), `volume_l`, `title`, `due_on` (date in the plan's zone),
+             *     `equipment_name`.
+             */
+            payload: {
+                [key: string]: unknown;
+            };
+            /**
+             * Format: date-time
+             * @description When the work was due or missed.
+             */
+            occurred_at: string;
+            /** Format: date-time */
+            read_at: string | null;
+            /** Format: date-time */
+            created_at: string;
         };
     };
     responses: {

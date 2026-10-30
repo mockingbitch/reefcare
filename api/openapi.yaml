@@ -33,6 +33,7 @@ tags:
   - name: equipment
   - name: maintenance
   - name: livestock
+  - name: notifications
 
 paths:
   /healthz:
@@ -1724,6 +1725,74 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /api/v1/notifications:
+    get:
+      tags: [notifications]
+      summary: Your notifications, newest first
+      description: |
+        Reminders created by a scan every 15 minutes: missed doses, water changes coming up
+        (within a day) or overdue, maintenance due today or overdue — once per occurrence.
+        Only the tank owner is reminded. Clients localize by `kind` with `payload`; unknown
+        kinds should render generically. Read notifications are kept 90 days, others 180.
+      parameters:
+        - { name: unread, in: query, schema: { type: boolean } }
+        - { $ref: "#/components/parameters/Limit" }
+        - { $ref: "#/components/parameters/Cursor" }
+      responses:
+        "200":
+          description: A page of notifications.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Notification" } }
+                  next_cursor: { type: [string, "null"] }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+  /api/v1/notifications/unread-count:
+    get:
+      tags: [notifications]
+      summary: How many notifications are unread (capped at 100)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count, capped]
+                properties:
+                  count: { type: integer, minimum: 0, maximum: 100 }
+                  capped: { type: boolean, description: "True when there are 100 or more (show \"99+\")." }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+  /api/v1/notifications/read-all:
+    post:
+      tags: [notifications]
+      summary: Mark every notification read
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      responses:
+        "204": { description: Done. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/notifications/{notificationID}/read:
+    parameters:
+      - name: notificationID
+        in: path
+        required: true
+        description: Another user's (or a malformed) ID is answered like an unknown one (404).
+        schema: { type: string, format: uuid }
+    post:
+      tags: [notifications]
+      summary: Mark one notification read (idempotent)
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      responses:
+        "204": { description: Done. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
 security:
   - session: []
 
@@ -1928,11 +1997,17 @@ components:
     NotificationPrefs:
       type: object
       additionalProperties: false
-      description: Opt-in email channels. Security emails cannot be turned off.
+      description: |
+        `email_*`: opt-in email channels (default off; email needs a verified address).
+        `reminders_<category>`: in-app reminders per category (default on). Security emails
+        cannot be turned off. `email_assessments` and `email_digest` are reserved.
       properties:
         email_reminders: { type: boolean }
         email_assessments: { type: boolean }
         email_digest: { type: boolean }
+        reminders_dosing: { type: boolean }
+        reminders_water_change: { type: boolean }
+        reminders_maintenance: { type: boolean }
     User:
       type: object
       required: [id, email, email_verified, display_name, username, bio, experience_level, locale, timezone,
@@ -1980,6 +2055,9 @@ components:
             email_reminders: { type: [boolean, "null"] }
             email_assessments: { type: [boolean, "null"] }
             email_digest: { type: [boolean, "null"] }
+            reminders_dosing: { type: [boolean, "null"] }
+            reminders_water_change: { type: [boolean, "null"] }
+            reminders_maintenance: { type: [boolean, "null"] }
     TankType:
       enum: [fish_only, fowlr, mixed_reef, sps_dominant, lps_dominant, soft_coral, custom]
     Dimensions:
@@ -2594,3 +2672,23 @@ components:
                 display_name: { type: string }
             - { type: "null" }
         summary: { type: object, additionalProperties: true }
+    Notification:
+      type: object
+      required: [id, tank_id, category, kind, payload, occurred_at, read_at, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        tank_id: { type: [string, "null"], format: uuid }
+        category: { enum: [dosing, water_change, maintenance] }
+        kind:
+          type: string
+          description: "`dosing.missed`, `water_change.upcoming`, `water_change.overdue`, `maintenance.due`, `maintenance.overdue`; new kinds may appear."
+        payload:
+          type: object
+          additionalProperties: true
+          description: |
+            Render-ready parameters, e.g. `tank_name`, `product_name`, `amount`, `unit`,
+            `scheduled_for` (UTC), `volume_l`, `title`, `due_on` (date in the plan's zone),
+            `equipment_name`.
+        occurred_at: { type: string, format: date-time, description: When the work was due or missed. }
+        read_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }

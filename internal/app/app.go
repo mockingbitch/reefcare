@@ -21,6 +21,7 @@ import (
 	"reefcare/internal/equipment"
 	"reefcare/internal/identity"
 	"reefcare/internal/livestock"
+	"reefcare/internal/notifications"
 	"reefcare/internal/platform/clock"
 	"reefcare/internal/platform/database"
 	"reefcare/internal/platform/httpserver"
@@ -144,6 +145,7 @@ func New(d Deps) App {
 	idSvc.OnErase(dosing.EraseUserData)
 	idSvc.OnErase(equipment.EraseUserData)
 	idSvc.OnErase(livestock.EraseUserData)
+	idSvc.OnErase(notifications.EraseUserData)
 	idSvc.OnErase(tanks.EraseUserData)
 	idSvc.RegisterJobs(runner)
 	idHTTP := identity.NewHandler(idSvc, d.Log, d.Config.SecureCookies())
@@ -160,6 +162,12 @@ func New(d Deps) App {
 	doseHTTP := dosing.NewHandler(doseSvc, idHTTP.RequireAuth, d.Log)
 	eqHTTP := equipment.NewHandler(equipment.NewService(d.Pool, d.Clock, d.Log), idHTTP.RequireAuth, d.Log)
 	lsHTTP := livestock.NewHandler(livestock.NewService(d.Pool, d.Clock, d.Log), idHTTP.RequireAuth, d.Log)
+	notifySvc := notifications.NewService(d.Pool, d.Clock, d.Mailer, d.Config.PublicBaseURL, d.Log)
+	notifySvc.AddSource(dosing.Reminders)
+	notifySvc.AddSource(waterchanges.Reminders)
+	notifySvc.AddSource(equipment.Reminders)
+	notifySvc.RegisterJobs(runner)
+	notifyHTTP := notifications.NewHandler(notifySvc, idHTTP.RequireAuth, d.Log)
 
 	var observe func(http.Handler) http.Handler
 	if d.Metrics != nil {
@@ -178,6 +186,7 @@ func New(d Deps) App {
 			doseHTTP.Mount(api)
 			eqHTTP.Mount(api)
 			lsHTTP.Mount(api)
+			notifyHTTP.Mount(api)
 		},
 	})
 	return App{Handler: handler, Jobs: runner}

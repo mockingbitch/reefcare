@@ -164,12 +164,16 @@ Implemented in `internal/platform/jobs` (milestone 2.3, decision D3: in-house).
 | `waterchanges.materialize` | hourly | keep occurrences of active schedules 35 days ahead |
 | `dosing.materialize` | hourly | keep occurrences of active plans 7 days ahead |
 | `dosing.mark_missed` | every 15 min | still-scheduled doses past their grace become `missed` (never completed) |
+| `notifications.scan` | every 15 min | run every module's reminder source; store one notification per occurrence (dedupe key); queue email for opted-in recipients |
+| `notifications.email` | per recipient and scan | send the recipient's pending reminders in one email (at least once) |
+| `notifications.purge` | daily | delete read notifications after 90 days, all after 180 |
 | `jobs.cleanup` | daily | delete old succeeded and dead jobs |
 
-Maintenance needs no job: `next_due_on` is stored and overdue is derived when read. Reminders
-(notifications, 2.9) will add a due check.
+Maintenance needs no job of its own: `next_due_on` is stored and overdue is derived when read;
+its reminder source runs in `notifications.scan`. Reminder sources (`notifications.Source`) are
+registered by dosing, water changes and equipment; each reads only its own tables.
 
-Planned (later milestones): `maintenance.due_check` (reminders), `waterparameters.staleness_check`, `notifications.deliver_email`.
+Planned (later milestones): `waterparameters.staleness_check`.
 
 ## 6. Configuration
 

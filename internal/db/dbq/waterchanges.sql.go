@@ -668,6 +668,72 @@ func (q *Queries) ListWaterChangeSchedulesToMaterialize(ctx context.Context, arg
 	return items, nil
 }
 
+const listWaterChangesForReminders = `-- name: ListWaterChangesForReminders :many
+SELECT e.id, e.tank_id, t.owner_id, t.name AS tank_name, e.scheduled_for::timestamptz AS scheduled_for,
+       e.overdue_after::timestamptz AS overdue_after, e.planned_volume_l
+FROM water_change_events e
+JOIN tanks t ON t.id = e.tank_id
+WHERE e.status = 'scheduled' AND t.status <> 'archived'
+  AND e.overdue_after >= $1::timestamptz AND e.overdue_after < $2::timestamptz
+  AND (e.overdue_after, e.id) > ($3::timestamptz, $4::uuid)
+ORDER BY e.overdue_after, e.id
+LIMIT $5
+`
+
+type ListWaterChangesForRemindersParams struct {
+	Since   time.Time
+	Until   time.Time
+	AfterAt time.Time
+	AfterID uuid.UUID
+	Batch   int32
+}
+
+type ListWaterChangesForRemindersRow struct {
+	ID             uuid.UUID
+	TankID         uuid.UUID
+	OwnerID        uuid.UUID
+	TankName       string
+	ScheduledFor   time.Time
+	OverdueAfter   time.Time
+	PlannedVolumeL *decimal.Decimal
+}
+
+// Reminder source: scheduled changes whose overdue_after is in [since, until) (recently
+// overdue, or due soon), keyset on (overdue_after, id).
+func (q *Queries) ListWaterChangesForReminders(ctx context.Context, arg ListWaterChangesForRemindersParams) ([]ListWaterChangesForRemindersRow, error) {
+	rows, err := q.db.Query(ctx, listWaterChangesForReminders,
+		arg.Since,
+		arg.Until,
+		arg.AfterAt,
+		arg.AfterID,
+		arg.Batch,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWaterChangesForRemindersRow{}
+	for rows.Next() {
+		var i ListWaterChangesForRemindersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TankID,
+			&i.OwnerID,
+			&i.TankName,
+			&i.ScheduledFor,
+			&i.OverdueAfter,
+			&i.PlannedVolumeL,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockOwnerWaterChangeSchedules = `-- name: LockOwnerWaterChangeSchedules :exec
 SELECT s.id FROM water_change_schedules s JOIN tanks t ON t.id = s.tank_id
 WHERE t.owner_id = $1

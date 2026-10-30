@@ -36,12 +36,17 @@ var unitPrefOptions = map[string][]string{
 	"salinity":    {"SG", "ppt"},
 }
 
-// notificationPrefKeys are the opt-in email channels (milestone 2.9 delivers them).
-// Security emails (password changed, account deactivated) cannot be turned off.
+// notificationPrefKeys: email_* are opt-in email channels (default off); reminders_<category>
+// turn a category of in-app reminders off (default on; package notifications). Security
+// emails (password changed, account deactivated) cannot be turned off. email_assessments and
+// email_digest are reserved for Phase 3 / open item NT3.
 var notificationPrefKeys = map[string]bool{
-	"email_reminders":   true,
-	"email_assessments": true,
-	"email_digest":      true,
+	"email_reminders":        true,
+	"email_assessments":      true,
+	"email_digest":           true,
+	"reminders_dosing":       true,
+	"reminders_water_change": true,
+	"reminders_maintenance":  true,
 }
 
 var (

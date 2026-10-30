@@ -258,6 +258,16 @@ retry with a used key is answered even after the tank was archived. Timeline:
 - `GET /api/v1/notifications?unread=true`, `POST /api/v1/notifications/{id}/read`,
   `POST /api/v1/notifications/read-all`
 
+As implemented (2.9): also `GET /notifications/unread-count` → `{count, capped}` (capped at 100).
+Lists are newest first with a keyset cursor; read endpoints answer 204 and are idempotent;
+another user's notification is 404. Each item: `kind`, `category`, `tank_id`, `payload`
+(render-ready; clients localize by `kind`), `occurred_at`, `read_at`. Preferences live in
+`PATCH /me` `notification_prefs`: `reminders_dosing|reminders_water_change|reminders_maintenance`
+(default on) and `email_reminders` (opt-in; verified address). Reminder emails contain counts
+per category and a link only — never tank names or other user-written text (whoever set up the
+account may not own the mailbox) — at most 4 per day, 3 hours apart, never 22:00–07:00 in the
+recipient's zone; held reminders stay pending and go out with the next allowed email.
+
 ### Intelligence (Phase 3)
 | Method | Path | Auth | Notes |
 |---|---|---|---|

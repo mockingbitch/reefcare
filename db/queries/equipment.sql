@@ -174,3 +174,16 @@ WHERE equipment_id IN (SELECT e.id FROM tank_equipment e JOIN tanks t ON t.id = 
 
 -- name: DeleteOwnerEquipment :exec
 DELETE FROM tank_equipment WHERE tank_id IN (SELECT id FROM tanks WHERE owner_id = @owner_id);
+
+-- name: ListMaintenanceForReminders :many
+-- Reminder source: active plans due in [since, until] (dates; the service applies each
+-- plan's zone), keyset on (next_due_on, id).
+SELECT p.id, p.tank_id, t.owner_id, t.name AS tank_name, p.title, p.timezone, p.next_due_on, e.name AS equipment_name
+FROM maintenance_plans p
+JOIN tanks t ON t.id = p.tank_id
+LEFT JOIN tank_equipment e ON e.id = p.equipment_id
+WHERE p.active AND t.status <> 'archived'
+  AND p.next_due_on >= sqlc.arg(since)::date AND p.next_due_on <= sqlc.arg(until)::date
+  AND (p.next_due_on, p.id) > (sqlc.arg(after_on)::date, sqlc.arg(after_id)::uuid)
+ORDER BY p.next_due_on, p.id
+LIMIT @batch;

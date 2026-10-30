@@ -206,3 +206,19 @@ DELETE FROM dosing_plans WHERE tank_id IN (SELECT id FROM tanks WHERE owner_id =
 -- name: DeleteOwnerDosingProducts :exec
 -- Private products are only usable on the owner's own tanks, whose rows are gone by now.
 DELETE FROM dosing_products WHERE owner_id = @owner_id;
+
+-- name: ListMissedDosesForReminders :many
+-- Reminder source: doses marked missed in [since, until) that were also due since then (after
+-- an outage the catch-up marks old doses missed now; they are not reminded), keyset on
+-- (missed_at, id).
+SELECT e.id, e.tank_id, t.owner_id, t.name AS tank_name, d.name AS product_name, e.scheduled_for::timestamptz AS scheduled_for,
+       e.planned_amount, e.amount_unit, e.missed_at::timestamptz AS missed_at
+FROM dosing_events e
+JOIN tanks t ON t.id = e.tank_id
+JOIN dosing_products d ON d.id = e.product_id
+WHERE e.status = 'missed' AND t.status <> 'archived'
+  AND e.missed_at >= sqlc.arg(since)::timestamptz AND e.missed_at < sqlc.arg(until)::timestamptz
+  AND e.scheduled_for >= sqlc.arg(since)::timestamptz
+  AND (e.missed_at, e.id) > (sqlc.arg(after_at)::timestamptz, sqlc.arg(after_id)::uuid)
+ORDER BY e.missed_at, e.id
+LIMIT @batch;

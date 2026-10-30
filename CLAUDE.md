@@ -44,7 +44,10 @@ Designer. Detailed, path-scoped rules live in `.claude/rules/` and load automati
   2.7 livestock is done (`internal/livestock`: private species, entries whose quantity is the
   event sum with no negative balance in event order, events, reconcile; photos are open item LS1).
   2.8 timeline feed is done (`GET /tanks/{id}/timeline` in package `tanks`: category and time
-  filters, keyset pagination). Next: 2.9 notifications; 2.1/2.2 once the D5 domain reviewer is named.
+  filters, keyset pagination). 2.9 notifications is done (`internal/notifications`: modules
+  register reminder sources, a 15-minute scan stores one notification per occurrence, opt-in
+  batched email, per-category prefs). Next: 2.10 web screens; 2.1/2.2 once the D5 domain
+  reviewer is named.
 - Unfinished work, known gaps and pending decisions are tracked in `docs/open-items.md`;
   update it when an item is completed or a new gap is found.
 - Go module path is `reefcare`. Migrations use sequential numbering (`make migration name=...`).
