@@ -71,6 +71,8 @@ reported at once. See `internal/config/config.go` and [docs/architecture.md](doc
 | `SMTP_USERNAME` / `SMTP_PASSWORD` | — | optional SMTP auth |
 | `MAIL_FROM` | `ReefCare <no-reply@localhost>` | required in production |
 | `ARGON2_MAX_CONCURRENCY` | GOMAXPROCS | max simultaneous password hashes (64 MiB each); keep × 64 MiB well under the memory limit |
+| `JOB_WORKERS` | `4` | background jobs run concurrently by this instance (1–64) |
+| `JOB_POLL_INTERVAL` | `1s` | idle wait between job polls |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
 | `LOG_FORMAT` | `json` | `json`, `text` |
 

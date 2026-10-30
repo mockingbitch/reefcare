@@ -31,7 +31,11 @@ Designer. Detailed, path-scoped rules live in `.claude/rules/` and load automati
   `platform/metrics`, `internal/apptest` (API integration harness).
   1.8 web shell is done (`web/`: SvelteKit 3 SPA, paraglide vi/en, typed client generated
   from `api/openapi.yaml`, Playwright e2e with axe; see `web/README.md`). **Phase 1 is
-  complete.** Next: Phase 2 (2.1 parameter catalog + unit conversion, needs D5 reviewer).
+  complete.**
+- Active phase: **Phase 2 — Reef management.** 2.3 job runner is done (`internal/platform/jobs`;
+  identity emails, failed-login audits, purges and 30-day account erasure run as jobs; modules
+  register account erasers with `identity.Service.OnErase`). Next: 2.1 parameter catalog + unit
+  conversion (needs the D5 domain reviewer) or 2.4+ in roadmap order.
 - Unfinished work, known gaps and pending decisions are tracked in `docs/open-items.md`;
   update it when an item is completed or a new gap is found.
 - Go module path is `reefcare`. Migrations use sequential numbering (`make migration name=...`).
@@ -144,3 +148,14 @@ codegen · docs match code · verification reported honestly.
   rate limiting, load tests, deployment, ops docs.
 
 Complete and verify each vertical slice before expanding scope.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- When graphify-out/graph.json exists, run `graphify query "<question>"` before your first grep, search or source-file read for a codebase question, and put this rule in every subagent prompt that explores code. Read raw files only for lines the graph or an earlier read already located. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+- A committed graphify-out/graph.json is rewritten whole on every build, so a large diff to it in a pull request is expected. Do not flag it as churn or suggest skipping the graph rebuild or its hooks.

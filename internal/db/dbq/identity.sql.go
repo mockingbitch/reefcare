@@ -14,6 +14,33 @@ import (
 	"github.com/google/uuid"
 )
 
+const anonymizeUser = `-- name: AnonymizeUser :execrows
+UPDATE users
+SET email = 'erased:' || id::text, email_verified_at = NULL, password_hash = '!',
+    auth_epoch = auth_epoch + 1, display_name = 'Deleted user', username = NULL, bio = NULL,
+    experience_level = NULL, locale = 'vi', timezone = 'Asia/Ho_Chi_Minh',
+    unit_prefs = '{}', notification_prefs = '{}', version = version + 1,
+    erased_at = $1::timestamptz, updated_at = $1::timestamptz
+WHERE id = $2 AND status = 'deactivated' AND erased_at IS NULL
+`
+
+type AnonymizeUserParams struct {
+	Now time.Time
+	ID  uuid.UUID
+}
+
+// Replaces every personal field. The placeholder "erased:<id>" has no "@", so it is not an
+// address anyone can register (which would make this UPDATE fail on the unique email and
+// block the erasure) and nothing can be mailed to it. The password becomes unusable and
+// the original address is free to register again.
+func (q *Queries) AnonymizeUser(ctx context.Context, arg AnonymizeUserParams) (int64, error) {
+	result, err := q.db.Exec(ctx, anonymizeUser, arg.Now, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const changeUserPassword = `-- name: ChangeUserPassword :one
 UPDATE users
 SET password_hash = $1, auth_epoch = auth_epoch + 1, updated_at = $2
@@ -200,6 +227,35 @@ func (q *Queries) DeactivateUser(ctx context.Context, arg DeactivateUserParams) 
 	return result.RowsAffected(), nil
 }
 
+const deleteUserCredentials = `-- name: DeleteUserCredentials :exec
+WITH s AS (DELETE FROM user_sessions WHERE user_id = $1),
+     t AS (DELETE FROM auth_tokens WHERE user_id = $1)
+DELETE FROM user_roles WHERE user_roles.user_id = $1
+`
+
+// Sessions, email-link tokens and roles of an account being erased.
+func (q *Queries) DeleteUserCredentials(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteUserCredentials, userID)
+	return err
+}
+
+const deleteUserJobs = `-- name: DeleteUserJobs :exec
+DELETE FROM jobs
+WHERE payload->>'user_id' = $1::uuid::text AND id <> $2 AND status <> 'running'
+`
+
+type DeleteUserJobsParams struct {
+	UserID       uuid.UUID
+	CurrentJobID int64
+}
+
+// Queued work about an account being erased (its payloads hold the user id and request
+// origin). The running erasure job itself is kept: the runner records its outcome.
+func (q *Queries) DeleteUserJobs(ctx context.Context, arg DeleteUserJobsParams) error {
+	_, err := q.db.Exec(ctx, deleteUserJobs, arg.UserID, arg.CurrentJobID)
+	return err
+}
+
 const findShareGranteeByEmail = `-- name: FindShareGranteeByEmail :one
 SELECT id FROM users WHERE email = $1 AND status = 'active' AND email_verified_at IS NOT NULL
 `
@@ -376,6 +432,32 @@ func (q *Queries) GetUserCredentialsByID(ctx context.Context, id uuid.UUID) (Get
 	return i, err
 }
 
+const getUserForMail = `-- name: GetUserForMail :one
+SELECT id, email, email_verified_at, locale, status FROM users WHERE id = $1 AND erased_at IS NULL
+`
+
+type GetUserForMailRow struct {
+	ID              uuid.UUID
+	Email           string
+	EmailVerifiedAt *time.Time
+	Locale          string
+	Status          string
+}
+
+// What email jobs need at send time; erased accounts are never mailed.
+func (q *Queries) GetUserForMail(ctx context.Context, id uuid.UUID) (GetUserForMailRow, error) {
+	row := q.db.QueryRow(ctx, getUserForMail, id)
+	var i GetUserForMailRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.EmailVerifiedAt,
+		&i.Locale,
+		&i.Status,
+	)
+	return i, err
+}
+
 const listUserRoles = `-- name: ListUserRoles :many
 SELECT role FROM user_roles WHERE user_id = $1 ORDER BY role
 `
@@ -398,6 +480,76 @@ func (q *Queries) ListUserRoles(ctx context.Context, userID uuid.UUID) ([]string
 		return nil, err
 	}
 	return items, nil
+}
+
+const listUsersDueForErasure = `-- name: ListUsersDueForErasure :many
+SELECT id, deactivated_at FROM users
+WHERE status = 'deactivated' AND erased_at IS NULL
+  AND deactivated_at <= $1::timestamptz
+  AND ($2::timestamptz IS NULL
+       OR (deactivated_at, id) > ($2::timestamptz, $3::uuid))
+ORDER BY deactivated_at, id
+LIMIT $4
+`
+
+type ListUsersDueForErasureParams struct {
+	DeactivatedBefore time.Time
+	AfterAt           *time.Time
+	AfterID           *uuid.UUID
+	Batch             int32
+}
+
+type ListUsersDueForErasureRow struct {
+	ID            uuid.UUID
+	DeactivatedAt *time.Time
+}
+
+// Keyset pagination on (deactivated_at, id): pass the last row of the previous page, or
+// NULLs for the first page.
+func (q *Queries) ListUsersDueForErasure(ctx context.Context, arg ListUsersDueForErasureParams) ([]ListUsersDueForErasureRow, error) {
+	rows, err := q.db.Query(ctx, listUsersDueForErasure,
+		arg.DeactivatedBefore,
+		arg.AfterAt,
+		arg.AfterID,
+		arg.Batch,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUsersDueForErasureRow{}
+	for rows.Next() {
+		var i ListUsersDueForErasureRow
+		if err := rows.Scan(&i.ID, &i.DeactivatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockUserForErasure = `-- name: LockUserForErasure :one
+SELECT id FROM users
+WHERE id = $1 AND status = 'deactivated' AND erased_at IS NULL
+  AND deactivated_at <= $2::timestamptz
+FOR UPDATE
+`
+
+type LockUserForErasureParams struct {
+	ID                uuid.UUID
+	DeactivatedBefore time.Time
+}
+
+// Locks the row; no rows unless the account is still deactivated, not yet erased, and its
+// grace period has passed (re-checked here: the account may have changed since enqueue).
+func (q *Queries) LockUserForErasure(ctx context.Context, arg LockUserForErasureParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, lockUserForErasure, arg.ID, arg.DeactivatedBefore)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
 const lockUserRow = `-- name: LockUserRow :exec
@@ -423,6 +575,49 @@ type MarkEmailVerifiedParams struct {
 
 func (q *Queries) MarkEmailVerified(ctx context.Context, arg MarkEmailVerifiedParams) (int64, error) {
 	result, err := q.db.Exec(ctx, markEmailVerified, arg.Now, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const purgeAuthTokens = `-- name: PurgeAuthTokens :execrows
+DELETE FROM auth_tokens
+WHERE id = ANY (ARRAY(SELECT x.id FROM auth_tokens x WHERE x.expires_at < $1 LIMIT $2))
+`
+
+type PurgeAuthTokensParams struct {
+	ExpiredBefore time.Time
+	Batch         int32
+}
+
+func (q *Queries) PurgeAuthTokens(ctx context.Context, arg PurgeAuthTokensParams) (int64, error) {
+	result, err := q.db.Exec(ctx, purgeAuthTokens, arg.ExpiredBefore, arg.Batch)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const purgeSessions = `-- name: PurgeSessions :execrows
+DELETE FROM user_sessions
+WHERE id = ANY (ARRAY(
+    SELECT x.id FROM user_sessions x
+    WHERE x.expires_at < $1 OR x.idle_expires_at < $1 OR x.revoked_at < $2::timestamptz
+    LIMIT $3
+))
+`
+
+type PurgeSessionsParams struct {
+	Now           time.Time
+	RevokedBefore time.Time
+	Batch         int32
+}
+
+// Sessions that can never resolve again (absolute or idle expiry passed) and revoked ones
+// after a grace period. Bounded batch.
+func (q *Queries) PurgeSessions(ctx context.Context, arg PurgeSessionsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, purgeSessions, arg.Now, arg.RevokedBefore, arg.Batch)
 	if err != nil {
 		return 0, err
 	}

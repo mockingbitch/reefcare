@@ -5,6 +5,7 @@ package identity_test
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -80,11 +81,15 @@ func TestDuplicateRegistrationIsIndistinguishable(t *testing.T) {
 	if first.Status != second.Status || first.Raw != second.Raw {
 		t.Fatalf("responses differ: %d %s vs %d %s", first.Status, first.Raw, second.Status, second.Raw)
 	}
+	// Emails come from jobs; wait for both, then check nothing else was sent.
+	e.Outbox.WaitFor(t, "verify_email", "minh@example.com", 0)
+	e.Outbox.WaitFor(t, "already_registered", "minh@example.com", 0)
 	kinds := []string{}
 	for _, m := range e.Outbox.All() {
 		kinds = append(kinds, m.Kind)
 	}
-	if strings.Join(kinds, ",") != "verify_email,already_registered" {
+	slices.Sort(kinds)
+	if strings.Join(kinds, ",") != "already_registered,verify_email" {
 		t.Fatalf("emails sent: %v", kinds)
 	}
 	var users int

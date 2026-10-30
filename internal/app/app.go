@@ -21,6 +21,7 @@ import (
 	"reefcare/internal/platform/clock"
 	"reefcare/internal/platform/database"
 	"reefcare/internal/platform/httpserver"
+	"reefcare/internal/platform/jobs"
 	"reefcare/internal/platform/logging"
 	"reefcare/internal/platform/mail"
 	"reefcare/internal/platform/metrics"
@@ -118,11 +119,24 @@ type Deps struct {
 	Metrics *metrics.Metrics
 }
 
-// NewHTTPHandler wires every module into the root router. The returned close function
-// waits for modules' background work and must be called after the server stops.
-func NewHTTPHandler(d Deps) (http.Handler, func(context.Context) error) {
+// App is the wired application: the HTTP handler and the background job runner, which
+// share the same modules.
+type App struct {
+	Handler http.Handler
+	Jobs    *jobs.Runner
+}
+
+// New wires every module into the root router and registers their background jobs.
+func New(d Deps) App {
+	runner := jobs.NewRunner(d.Pool, d.Clock, d.Log, jobs.Config{Workers: d.Config.JobWorkers, PollInterval: d.Config.JobPollInterval})
+	if d.Metrics != nil {
+		runner.Observe(d.Metrics)
+	}
 	idSvc := identity.NewService(d.Pool, d.Clock, identity.NewHasher(d.Argon2, d.Config.Argon2MaxConcurrent), d.Mailer,
 		identity.DefaultLimits(d.Clock), identity.DefaultConfig(d.Config.PublicBaseURL), d.Log)
+	// Every module holding user data registers how to erase it (docs/security.md §9).
+	idSvc.OnErase(tanks.EraseUserData)
+	idSvc.RegisterJobs(runner)
 	idHTTP := identity.NewHandler(idSvc, d.Log, d.Config.SecureCookies())
 	tankHTTP := tanks.NewHandler(tanks.NewService(d.Pool, d.Clock, tanks.DefaultLimits(d.Clock), d.Log), idHTTP.RequireAuth, d.Log)
 
@@ -130,7 +144,7 @@ func NewHTTPHandler(d Deps) (http.Handler, func(context.Context) error) {
 	if d.Metrics != nil {
 		observe = d.Metrics.Middleware
 	}
-	return httpserver.NewRouter(d.Log, httpserver.Options{
+	handler := httpserver.NewRouter(d.Log, httpserver.Options{
 		Observe:        observe,
 		Ready:          d.Ready,
 		TrustedProxies: d.Config.TrustedProxies,
@@ -140,7 +154,8 @@ func NewHTTPHandler(d Deps) (http.Handler, func(context.Context) error) {
 			idHTTP.Mount(api)
 			tankHTTP.Mount(api)
 		},
-	}), idSvc.Close
+	})
+	return App{Handler: handler, Jobs: runner}
 }
 
 func serve(ctx context.Context, cfg config.Config, log *slog.Logger) error {
@@ -167,31 +182,44 @@ func serve(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		}
 		sender = smtpSender
 	}
-	mailer := mail.NewAsync(sender, log, 1000)
-
 	var metricsReg *metrics.Metrics
 	if cfg.MetricsAddr != "" {
 		metricsReg = metrics.New(pool)
 	}
-	router, closeModules := NewHTTPHandler(Deps{
-		Config: cfg, Log: log, Pool: pool, Clock: clock.System{}, Mailer: mailer, Metrics: metricsReg,
+	application := New(Deps{
+		Config: cfg, Log: log, Pool: pool, Clock: clock.System{}, Mailer: sender, Metrics: metricsReg,
 		Argon2: identity.DefaultArgon2Params,
 		Ready: map[string]httpserver.ReadinessCheck{
 			"database":   pool.Ping,
 			"migrations": m.CheckCompatible,
 		},
 	})
-	srv := httpserver.NewServer(cfg.HTTPAddr, router)
-	// Runs after Shutdown: module background work may still queue emails, so it is
-	// drained before the mail queue closes.
+	srv := httpserver.NewServer(cfg.HTTPAddr, application.Handler)
+
+	// Jobs run until the HTTP server has drained; started jobs then finish (each is
+	// bounded by its timeout) before the pool closes. Unstarted jobs stay queued.
+	jobsCtx, stopJobs := context.WithCancel(context.WithoutCancel(ctx))
+	jobsDone := make(chan struct{})
+	go func() {
+		defer close(jobsDone)
+		log.Info("job runner started", "workers", cfg.JobWorkers)
+		application.Jobs.Run(jobsCtx)
+	}()
 	defer func() {
-		drainCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-		defer cancel()
-		if err := closeModules(drainCtx); err != nil {
-			log.Error("background work", "err", err)
+		stopJobs()
+		select {
+		case <-jobsDone:
+			return
+		case <-time.After(cfg.ShutdownTimeout):
 		}
-		if err := mailer.Close(drainCtx); err != nil {
-			log.Error("email queue", "err", err)
+		// Past the deadline: cancel running handlers so the pool can close. Their jobs
+		// are re-queued once the lease expires.
+		log.Error("job runner did not stop in time; cancelling running jobs")
+		application.Jobs.Abort()
+		select {
+		case <-jobsDone:
+		case <-time.After(15 * time.Second):
+			log.Error("jobs still running after cancellation")
 		}
 	}()
 

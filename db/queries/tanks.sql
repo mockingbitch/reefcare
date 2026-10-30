@@ -141,3 +141,19 @@ ON CONFLICT (source_type, source_id, event_type) DO NOTHING;
 -- Taken first by workflows that change the tank row or check per-tank limits ("at most
 -- N shares"), so concurrent writers queue instead of deadlocking on a FOR SHARE upgrade.
 SELECT id FROM tanks WHERE id = @id FOR NO KEY UPDATE;
+
+-- name: DeleteOwnerTankData :exec
+-- Account erasure: every tank of the owner with its children, in FK order (tank_events and
+-- tanks are RESTRICT on purpose so nothing else deletes them). Add new tank child tables here.
+-- Locking the owned tanks makes concurrent child inserts (whose FK check needs KEY SHARE)
+-- wait, so none can slip in before DeleteOwnerTanks.
+WITH owned AS (SELECT id FROM tanks WHERE owner_id = @owner_id FOR UPDATE),
+     ev AS (DELETE FROM tank_events WHERE tank_id IN (SELECT id FROM owned)),
+     sh AS (DELETE FROM tank_shares WHERE tank_id IN (SELECT id FROM owned))
+SELECT 1;
+
+-- name: DeleteOwnerTanks :exec
+DELETE FROM tanks WHERE owner_id = @owner_id;
+
+-- name: DeleteGranteeShares :exec
+DELETE FROM tank_shares WHERE user_id = @user_id;

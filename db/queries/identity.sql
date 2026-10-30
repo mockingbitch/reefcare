@@ -164,3 +164,65 @@ WHERE username = sqlc.arg(username)::citext AND status = 'active' AND email_veri
 -- name: LockUserRow :exec
 -- Serializes per-user checks such as "at most N tanks" against concurrent creates.
 SELECT id FROM users WHERE id = @id FOR NO KEY UPDATE;
+
+-- name: GetUserForMail :one
+-- What email jobs need at send time; erased accounts are never mailed.
+SELECT id, email, email_verified_at, locale, status FROM users WHERE id = @id AND erased_at IS NULL;
+
+-- name: PurgeSessions :execrows
+-- Sessions that can never resolve again (absolute or idle expiry passed) and revoked ones
+-- after a grace period. Bounded batch.
+DELETE FROM user_sessions
+WHERE id = ANY (ARRAY(
+    SELECT x.id FROM user_sessions x
+    WHERE x.expires_at < @now OR x.idle_expires_at < @now OR x.revoked_at < sqlc.arg(revoked_before)::timestamptz
+    LIMIT @batch
+));
+
+-- name: PurgeAuthTokens :execrows
+DELETE FROM auth_tokens
+WHERE id = ANY (ARRAY(SELECT x.id FROM auth_tokens x WHERE x.expires_at < @expired_before LIMIT @batch));
+
+-- name: ListUsersDueForErasure :many
+-- Keyset pagination on (deactivated_at, id): pass the last row of the previous page, or
+-- NULLs for the first page.
+SELECT id, deactivated_at FROM users
+WHERE status = 'deactivated' AND erased_at IS NULL
+  AND deactivated_at <= sqlc.arg(deactivated_before)::timestamptz
+  AND (sqlc.narg(after_at)::timestamptz IS NULL
+       OR (deactivated_at, id) > (sqlc.narg(after_at)::timestamptz, sqlc.narg(after_id)::uuid))
+ORDER BY deactivated_at, id
+LIMIT @batch;
+
+-- name: LockUserForErasure :one
+-- Locks the row; no rows unless the account is still deactivated, not yet erased, and its
+-- grace period has passed (re-checked here: the account may have changed since enqueue).
+SELECT id FROM users
+WHERE id = @id AND status = 'deactivated' AND erased_at IS NULL
+  AND deactivated_at <= sqlc.arg(deactivated_before)::timestamptz
+FOR UPDATE;
+
+-- name: DeleteUserCredentials :exec
+-- Sessions, email-link tokens and roles of an account being erased.
+WITH s AS (DELETE FROM user_sessions WHERE user_id = @user_id),
+     t AS (DELETE FROM auth_tokens WHERE user_id = @user_id)
+DELETE FROM user_roles WHERE user_roles.user_id = @user_id;
+
+-- name: AnonymizeUser :execrows
+-- Replaces every personal field. The placeholder "erased:<id>" has no "@", so it is not an
+-- address anyone can register (which would make this UPDATE fail on the unique email and
+-- block the erasure) and nothing can be mailed to it. The password becomes unusable and
+-- the original address is free to register again.
+UPDATE users
+SET email = 'erased:' || id::text, email_verified_at = NULL, password_hash = '!',
+    auth_epoch = auth_epoch + 1, display_name = 'Deleted user', username = NULL, bio = NULL,
+    experience_level = NULL, locale = 'vi', timezone = 'Asia/Ho_Chi_Minh',
+    unit_prefs = '{}', notification_prefs = '{}', version = version + 1,
+    erased_at = sqlc.arg(now)::timestamptz, updated_at = sqlc.arg(now)::timestamptz
+WHERE id = @id AND status = 'deactivated' AND erased_at IS NULL;
+
+-- name: DeleteUserJobs :exec
+-- Queued work about an account being erased (its payloads hold the user id and request
+-- origin). The running erasure job itself is kept: the runner records its outcome.
+DELETE FROM jobs
+WHERE payload->>'user_id' = sqlc.arg(user_id)::uuid::text AND id <> @current_job_id AND status <> 'running';

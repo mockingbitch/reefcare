@@ -66,6 +66,11 @@ func TestLoadValidation(t *testing.T) {
 		wantErr string
 	}{
 		{
+			name:    "job workers out of range",
+			env:     map[string]string{"DATABASE_URL": "postgres://localhost/db", "JOB_WORKERS": "0"},
+			wantErr: "JOB_WORKERS",
+		},
+		{
 			name:    "malformed metrics address",
 			env:     map[string]string{"DATABASE_URL": "postgres://localhost/db", "METRICS_ADDR": "9090"},
 			wantErr: "METRICS_ADDR must be host:port",

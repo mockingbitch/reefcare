@@ -18,7 +18,9 @@ F6 general write limit · F7 Prometheus metrics · S3 tokens bound to their emai
 P2 serializable retry · P3 field-level errors for custom JSON types (incl. nested and miscased
 members) · R3 `/new-migration` skill · R5 Go installed locally · F4 web shell (`web/`, accepted
 proposal in [frontend.md](frontend.md); unit, component and Playwright e2e tests with axe) ·
-R6 scratch database removed · R2 `.env.example` added (deny rules in `.claude/settings.json` narrowed to real env files). All reviewed by db-architect,
+R6 scratch database removed · R2 `.env.example` added (deny rules in `.claude/settings.json` narrowed to real env files) ·
+2.3 job queue with J1 durable email, J2 durable identity background work, J3 session/token purge,
+J4 account erasure after 30 days (also resolves S5: the address is free again after erasure). All reviewed by db-architect,
 go-reviewer and security-auditor; their findings were fixed or are listed below.
 
 ## 1. Must do before launch
@@ -41,14 +43,16 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 | F11 | Sign-out does not reach other open tabs | P3 | Other tabs show the user until their next API call returns 401 (web security review L4). Use a `BroadcastChannel` signal |
 | F10 | Dev-only npm advisories | P3 | `npm audit` reports 4 low-severity issues in `deepmerge` via `@sveltejs/vite-plugin-svelte` (build tooling only); `npm audit --omit=dev` is clean and runs in CI. Wait for the upstream fix |
 
-## 3. Waiting on the job queue (milestone 2.3)
+## 3. Background jobs (milestone 2.3 done)
 
 | # | Item | Priority | Notes |
 |---|---|---|---|
-| J1 | Durable email delivery | P1 | `mail.Async` is in memory: queued emails are lost if the process crashes |
-| J2 | Durable background work in identity (failed-login audit, reset-token issue) | P2 | Bounded to 64 in flight; extra work is dropped and logged |
-| J3 | Purge expired sessions and auth tokens | P2 | Indexes on `expires_at` exist; the purge job doesn't |
-| J4 | Erase/anonymize deactivated accounts after 30 days | P2 | `DELETE /me` records `erase_after`. The job must keep the `users` row (anonymized: email, names, username, bio, prefs) because the ledger and audit log reference it, and delete the tank subtree explicitly in FK order (`tank_events` → future tank children → `tank_shares` → `tanks`). `tanks.owner_id` and `tank_events.tank_id` are `RESTRICT` on purpose — do not change them to `CASCADE`. Every new tank child table must be added to the job. Also releases the username (security review L2) |
+| J5 | No admin view of dead jobs | P3 | Dead jobs are logged at error level and kept 30 days (`SELECT … FROM jobs WHERE status = 'dead'`); an admin endpoint or alert on `reefcare_jobs_total{outcome="dead"}` comes with Phase 5 observability |
+| J6 | Long jobs have no lease heartbeat | P3 | The lease is handler timeout (2 min) + 30 s. Erasure of very large accounts or future bulk jobs must stay under the timeout or batch across runs |
+| J7 | Erasure deletes a large account's tank data in one transaction | P2 before Phase 2 data | Fine for Phase 1 volumes. Before water tests, doses and events grow: add an `erasure_started_at` fence, delete per tank in bounded batches across transactions, anonymize last (DB review). Every new tank child table must also be added to `tanks.EraseUserData` / `DeleteOwnerTankData` |
+| J8 | Two accounts that share tanks with each other and are erased at the same moment can deadlock (40P01) | P3 | The job retry absorbs it; lock shares in a fixed order in `EraseUserData` if it shows up in logs |
+| J9 | `erase_due` pagination beyond one batch (500) has no test | P3 | Keyset pagination on `(deactivated_at, id)` replaced the loop that could spin; a test needs an injectable batch size |
+| J10 | Index changes on large tables | P3 | 00005 builds indexes in its transaction (fine pre-launch). From launch on, `CREATE INDEX CONCURRENTLY` in a separate non-transactional migration |
 
 ## 4. Security and identity follow-ups
 
@@ -57,11 +61,11 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 | S1 | Rate limiting is per process | P2 | Decision D7 | Needs a shared store before running more than one API instance |
 | S2 | Separate DB roles: app role DML-only, migration role for DDL, `REVOKE UPDATE/DELETE` on append-only tables | P2 | docs/security.md §5 | Today a single role is used; `audit_logs` is protected by a trigger only |
 | S4 | Account pre-hijacking policy | P3 | Security review L6 (1.4) | Should verifying an old, never-verified registration also invalidate its password? (product decision). Shares already require a verified grantee |
-| S5 | Deactivated accounts keep their email and username until erasure | P3 | DB review L8, security review L2 | Decide whether the address may be re-registered after erasure; J4 frees both |
 | S7 | MFA / social login | P3 | Decision D10 | Post-MVP |
 | S8 | Personal data export (JSON) | P3 | docs/security.md §9 | Phase 5 |
 | S9 | Monitor `golang.org/x/crypto` advisory GO-2026-5932 (openpgp) | P3 | govulncheck | Not reachable from our code; no upstream fix |
 | S10 | Share endpoint is an account-existence oracle | P3 | Security review L3 | Mitigated: verified owner, 30/h per owner, verified grantees only. Options: add a per-IP tier, audit `grantee_not_found` lookups |
+| S12 | Retention period for `audit_logs` (incl. erased accounts' IP prefixes) | P2 | Security review L4 | Rows are append-only by trigger; decide a retention (e.g. 1 year) and a privileged purge path |
 | S11 | Email change flow | P3 | DB review | When built: revoke all live tokens in the same transaction (the one-live-token index would otherwise block the new verification), audit, notify the old address |
 
 ## 5. Platform and data follow-ups

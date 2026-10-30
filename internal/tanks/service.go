@@ -419,3 +419,17 @@ func (s *Service) Revoke(ctx context.Context, a Actor, id, grantee uuid.UUID) er
 		})
 	})
 }
+
+// EraseUserData deletes an erased account's tank data inside the erasure transaction
+// (identity.Eraser, docs/security.md §9): shares granted to the account, and every tank it
+// owns with that tank's timeline and shares. Events the account recorded on other
+// people's tanks stay; their actor row is anonymized by identity.
+func EraseUserData(ctx context.Context, q *dbq.Queries, userID uuid.UUID) error {
+	if err := q.DeleteGranteeShares(ctx, userID); err != nil {
+		return err
+	}
+	if err := q.DeleteOwnerTankData(ctx, userID); err != nil {
+		return err
+	}
+	return q.DeleteOwnerTanks(ctx, userID)
+}

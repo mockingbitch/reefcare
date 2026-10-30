@@ -258,7 +258,6 @@ func (s *Service) DeleteAccount(ctx context.Context, c Client, p Principal, pass
 	}
 	now := s.clock.Now()
 	eraseAfter := now.Add(AccountEraseDelay)
-	var locale string
 	err = database.InTx(ctx, s.pool, func(tx pgx.Tx) error {
 		q := dbq.New(tx)
 		n, err := q.DeactivateUser(ctx, dbq.DeactivateUserParams{ID: p.UserID, Now: now})
@@ -274,11 +273,9 @@ func (s *Service) DeleteAccount(ctx context.Context, c Client, p Principal, pass
 		if err := q.RevokeAllLiveAuthTokens(ctx, dbq.RevokeAllLiveAuthTokensParams{UserID: p.UserID, Now: now}); err != nil {
 			return err
 		}
-		u, err := q.GetUserByID(ctx, p.UserID)
-		if err != nil {
+		if err := enqueueEmail(ctx, q, now, &p.UserID, templateAccountDeactivated, c.Origin); err != nil {
 			return err
 		}
-		locale = u.Locale
 		return audit.Record(ctx, q, now, c.Origin, audit.Entry{
 			ActorID: &p.UserID, Action: "account.deactivated", TargetType: "user", TargetID: &p.UserID,
 			Metadata: map[string]any{"erase_after": eraseAfter.UTC().Format(time.RFC3339)},
@@ -287,7 +284,6 @@ func (s *Service) DeleteAccount(ctx context.Context, c Client, p Principal, pass
 	if err != nil {
 		return time.Time{}, err
 	}
-	s.send(ctx, s.email("account_deactivated", locale, creds.Email, "/", ""))
 	return eraseAfter, nil
 }
 

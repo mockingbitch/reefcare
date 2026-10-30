@@ -37,6 +37,23 @@ type AuthToken struct {
 	Email     string
 }
 
+type Job struct {
+	ID          int64
+	Kind        string
+	DedupeKey   *string
+	Payload     json.RawMessage
+	RunAt       time.Time
+	Status      string
+	Attempts    int32
+	MaxAttempts int32
+	LockedBy    *string
+	LockedUntil *time.Time
+	LastError   *string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	FinishedAt  *time.Time
+}
+
 type Tank struct {
 	ID             uuid.UUID
 	OwnerID        uuid.UUID
@@ -99,6 +116,7 @@ type User struct {
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
 	Version           int32
+	ErasedAt          *time.Time
 }
 
 type UserRole struct {

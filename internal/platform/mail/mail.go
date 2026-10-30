@@ -1,4 +1,5 @@
-// Package mail sends transactional email.
+// Package mail sends transactional email. Messages are sent from durable jobs
+// (identity's "identity.email" job), never from the request path.
 package mail
 
 import (
@@ -16,7 +17,6 @@ import (
 	"net/smtp"
 	"net/textproto"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -140,9 +140,10 @@ func (s *SMTPSender) render(to mail.Address, m Message) []byte {
 	return b.Bytes()
 }
 
-// logSafe reduces an SMTP error to its reply code: server reply text often echoes the
-// recipient address, which must never be logged (docs/security.md §8).
-func logSafe(err error) string {
+// SafeReason reduces a send error to its SMTP reply code or network error class: server
+// reply text often echoes the recipient address, which must never be logged or stored
+// (docs/security.md §8).
+func SafeReason(err error) string {
 	var tpErr *textproto.Error
 	if errors.As(err, &tpErr) {
 		return fmt.Sprintf("smtp reply %d", tpErr.Code)
@@ -162,68 +163,4 @@ type LogSender struct{ Log *slog.Logger }
 func (l LogSender) Send(ctx context.Context, m Message) error {
 	l.Log.InfoContext(ctx, "email not sent: no SMTP configured", "kind", m.Kind)
 	return nil
-}
-
-// Async queues messages for a background worker so request latency does not reveal
-// whether an email was sent (account enumeration). Messages still queued when the
-// process stops are lost; durable delivery moves to the job queue in milestone 2.3.
-type Async struct {
-	sender Sender
-	log    *slog.Logger
-	queue  chan Message
-	wg     sync.WaitGroup
-
-	mu     sync.RWMutex
-	closed bool
-}
-
-// NewAsync starts a worker delivering through sender with a queue of size capacity.
-func NewAsync(sender Sender, log *slog.Logger, capacity int) *Async {
-	a := &Async{sender: sender, log: log, queue: make(chan Message, capacity)}
-	a.wg.Add(1)
-	go a.run()
-	return a
-}
-
-func (a *Async) run() {
-	defer a.wg.Done()
-	for m := range a.queue {
-		if err := a.sender.Send(context.Background(), m); err != nil {
-			a.log.Error("send email failed", "kind", m.Kind, "reason", logSafe(err))
-		}
-	}
-}
-
-// Send enqueues m without blocking; it fails when the queue is full or closed.
-func (a *Async) Send(_ context.Context, m Message) error {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	if a.closed {
-		return errors.New("email queue closed")
-	}
-	select {
-	case a.queue <- m:
-		return nil
-	default:
-		a.log.Error("email queue full; message dropped", "kind", m.Kind)
-		return errors.New("email queue full")
-	}
-}
-
-// Close stops accepting messages and waits for queued ones until ctx expires.
-func (a *Async) Close(ctx context.Context) error {
-	a.mu.Lock()
-	if !a.closed {
-		a.closed = true
-		close(a.queue)
-	}
-	a.mu.Unlock()
-	done := make(chan struct{})
-	go func() { a.wg.Wait(); close(done) }()
-	select {
-	case <-done:
-		return nil
-	case <-ctx.Done():
-		return fmt.Errorf("email queue not drained: %w", ctx.Err())
-	}
 }

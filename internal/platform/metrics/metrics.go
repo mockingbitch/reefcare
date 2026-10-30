@@ -21,6 +21,8 @@ type Metrics struct {
 	requests *prometheus.CounterVec
 	duration *prometheus.HistogramVec
 	inFlight prometheus.Gauge
+	jobs     *prometheus.CounterVec
+	jobTime  *prometheus.HistogramVec
 }
 
 // New registers runtime, process and (when pool is non-nil) pool metrics.
@@ -39,12 +41,26 @@ func New(pool *pgxpool.Pool) *Metrics {
 			Name: "reefcare_http_requests_in_flight", Help: "HTTP requests currently being served.",
 		}),
 	}
-	reg.MustRegister(m.requests, m.duration, m.inFlight,
+	m.jobs = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "reefcare_jobs_total", Help: "Background job runs by kind and outcome (succeeded, retry, dead).",
+	}, []string{"kind", "outcome"})
+	m.jobTime = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name: "reefcare_job_duration_seconds", Help: "Background job run time by kind.",
+		Buckets: []float64{.01, .05, .1, .5, 1, 5, 15, 60, 120},
+	}, []string{"kind"})
+	reg.MustRegister(m.requests, m.duration, m.inFlight, m.jobs, m.jobTime,
 		collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	if pool != nil {
 		reg.MustRegister(poolCollector{pool: pool})
 	}
 	return m
+}
+
+// JobFinished implements jobs.Observer. Kinds are the registered handler names, so the
+// label set is bounded.
+func (m *Metrics) JobFinished(kind, outcome string, d time.Duration) {
+	m.jobs.WithLabelValues(kind, outcome).Inc()
+	m.jobTime.WithLabelValues(kind).Observe(d.Seconds())
 }
 
 // Handler serves the metrics in the Prometheus exposition format.

@@ -136,6 +136,40 @@ func (q *Queries) CreateTankShare(ctx context.Context, arg CreateTankShareParams
 	return result.RowsAffected(), nil
 }
 
+const deleteGranteeShares = `-- name: DeleteGranteeShares :exec
+DELETE FROM tank_shares WHERE user_id = $1
+`
+
+func (q *Queries) DeleteGranteeShares(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteGranteeShares, userID)
+	return err
+}
+
+const deleteOwnerTankData = `-- name: DeleteOwnerTankData :exec
+WITH owned AS (SELECT id FROM tanks WHERE owner_id = $1 FOR UPDATE),
+     ev AS (DELETE FROM tank_events WHERE tank_id IN (SELECT id FROM owned)),
+     sh AS (DELETE FROM tank_shares WHERE tank_id IN (SELECT id FROM owned))
+SELECT 1
+`
+
+// Account erasure: every tank of the owner with its children, in FK order (tank_events and
+// tanks are RESTRICT on purpose so nothing else deletes them). Add new tank child tables here.
+// Locking the owned tanks makes concurrent child inserts (whose FK check needs KEY SHARE)
+// wait, so none can slip in before DeleteOwnerTanks.
+func (q *Queries) DeleteOwnerTankData(ctx context.Context, ownerID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteOwnerTankData, ownerID)
+	return err
+}
+
+const deleteOwnerTanks = `-- name: DeleteOwnerTanks :exec
+DELETE FROM tanks WHERE owner_id = $1
+`
+
+func (q *Queries) DeleteOwnerTanks(ctx context.Context, ownerID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteOwnerTanks, ownerID)
+	return err
+}
+
 const deleteTankShare = `-- name: DeleteTankShare :execrows
 DELETE FROM tank_shares WHERE tank_id = $1 AND user_id = $2
 `

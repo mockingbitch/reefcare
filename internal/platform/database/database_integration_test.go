@@ -70,8 +70,10 @@ func TestInSerializableTxRetries(t *testing.T) {
 		t.Fatal(err)
 	}
 	var attempts atomic.Int32
-	ready := make(chan struct{})
-	var once sync.Once
+	// Barrier: both first attempts read before either writes, so the write skew (and
+	// therefore a serialization failure) is guaranteed rather than timing-dependent.
+	var bothRead sync.WaitGroup
+	bothRead.Add(2)
 	run := func(read, write string) error {
 		return database.InSerializableTx(ctx, pool, func(tx pgx.Tx) error {
 			n := attempts.Add(1)
@@ -79,10 +81,9 @@ func TestInSerializableTxRetries(t *testing.T) {
 			if err := tx.QueryRow(ctx, `SELECT sum(v) FROM ledger WHERE k = $1`, read).Scan(&sum); err != nil {
 				return err
 			}
-			if n <= 2 { // make the first two attempts overlap
-				once.Do(func() { close(ready) })
-				<-ready
-				time.Sleep(50 * time.Millisecond)
+			if n <= 2 {
+				bothRead.Done()
+				bothRead.Wait()
 			}
 			_, err := tx.Exec(ctx, `UPDATE ledger SET v = v + 1 WHERE k = $1`, write)
 			return err

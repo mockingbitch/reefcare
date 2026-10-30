@@ -46,16 +46,15 @@ func TestOpenAPIMatchesRoutes(t *testing.T) {
 		}
 	}
 
-	h, closeFn := NewHTTPHandler(Deps{
+	application := New(Deps{
 		Config: config.Config{PublicBaseURL: "http://reefcare.test"},
 		Log:    slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Clock:  clock.System{}, Mailer: mail.LogSender{Log: slog.New(slog.NewTextHandler(io.Discard, nil))},
 		Argon2: identity.Argon2Params{MemoryKiB: 1024, Iterations: 1, Parallelism: 1},
 	})
-	defer func() { _ = closeFn(t.Context()) }()
-	routes, ok := h.(chi.Routes)
+	routes, ok := application.Handler.(chi.Routes)
 	if !ok {
-		t.Fatalf("router is %T, not chi.Routes", h)
+		t.Fatalf("router is %T, not chi.Routes", application.Handler)
 	}
 	served := map[string]bool{}
 	err = chi.Walk(routes, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {

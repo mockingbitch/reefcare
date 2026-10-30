@@ -51,6 +51,10 @@ type Config struct {
 	// Argon2MaxConcurrent bounds simultaneous password hashes (64 MiB each);
 	// 0 means GOMAXPROCS. Keep it × 64 MiB well under the container memory limit.
 	Argon2MaxConcurrent int
+
+	// JobWorkers is the number of background jobs run concurrently by this instance.
+	JobWorkers      int
+	JobPollInterval time.Duration
 }
 
 // SecureCookies reports whether cookies must carry the Secure attribute.
@@ -82,6 +86,8 @@ func Load(lookup func(string) (string, bool)) (Config, error) {
 		SMTPPassword:        p.str("SMTP_PASSWORD", ""),
 		MailFrom:            p.str("MAIL_FROM", "ReefCare <no-reply@localhost>"),
 		Argon2MaxConcurrent: p.intRange("ARGON2_MAX_CONCURRENCY", 0, 0, 256),
+		JobWorkers:          p.intRange("JOB_WORKERS", 4, 1, 64),
+		JobPollInterval:     p.duration("JOB_POLL_INTERVAL", time.Second),
 	}
 	if cfg.PublicBaseURL == "" && !cfg.IsProduction() {
 		cfg.PublicBaseURL = "http://localhost:8080"

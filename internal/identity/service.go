@@ -9,7 +9,6 @@ import (
 	"log/slog"
 	"net/mail"
 	"strings"
-	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -133,19 +132,17 @@ type Service struct {
 	limits Limits
 	cfg    Config
 	log    *slog.Logger
-	bg     *background
+	// erasers delete other modules' data of an account being erased (see OnErase).
+	erasers []Eraser
 }
 
-// NewService wires the identity service. Call Close on shutdown.
+// NewService wires the identity service. Emails are sent by the job handlers that
+// RegisterJobs adds; mailer is only used there.
 func NewService(pool *pgxpool.Pool, clk clock.Clock, hasher *Hasher, mailer reefmail.Sender, limits Limits, cfg Config, log *slog.Logger) *Service {
 	return &Service{
 		pool: pool, clock: clk, hasher: hasher, mailer: mailer, limits: limits, cfg: cfg, log: log,
-		bg: &background{log: log, slots: make(chan struct{}, 64)},
 	}
 }
-
-// Close waits for background work (deferred audits, token issuing) until ctx expires.
-func (s *Service) Close(ctx context.Context) error { return s.bg.wait(ctx) }
 
 var (
 	errInvalidCredentials = apperr.Unauthenticated("invalid_credentials", "Email or password is incorrect.")
@@ -169,7 +166,8 @@ func validEmail(email string) bool {
 		return false
 	}
 	addr, err := mail.ParseAddress(email)
-	return err == nil && addr.Address == email && addr.Name == ""
+	// .invalid is a reserved TLD (RFC 2606) that can never receive mail.
+	return err == nil && addr.Address == email && addr.Name == "" && !strings.HasSuffix(email, ".invalid")
 }
 
 func allow(l *ratelimit.Limiter, key string) error {
@@ -188,12 +186,6 @@ func allowClient(perIP, perNet *ratelimit.Limiter, c Client) error {
 		return err
 	}
 	return allow(perNet, c.RateNetKey)
-}
-
-func (s *Service) send(ctx context.Context, m reefmail.Message) {
-	if err := s.mailer.Send(ctx, m); err != nil {
-		s.log.ErrorContext(ctx, "queue email", "kind", m.Kind, "err", err)
-	}
 }
 
 // RegisterInput is the sign-up form.
@@ -239,7 +231,6 @@ func (s *Service) Register(ctx context.Context, c Client, in RegisterInput) erro
 		return err
 	}
 	now := s.clock.Now()
-	var msg reefmail.Message
 	err = database.InTx(ctx, s.pool, func(tx pgx.Tx) error {
 		q := dbq.New(tx)
 		row, err := q.CreateUser(ctx, dbq.CreateUserParams{
@@ -251,21 +242,15 @@ func (s *Service) Register(ctx context.Context, c Client, in RegisterInput) erro
 		if err != nil {
 			return err
 		}
-		token, err := s.issueToken(ctx, q, row.ID, email, purposeVerify, now, s.cfg.VerifyTokenTTL)
-		if err != nil {
+		if err := enqueueEmail(ctx, q, now, &row.ID, purposeVerify, c.Origin); err != nil {
 			return err
 		}
-		msg = s.email(purposeVerify, locale, email, "/verify-email", token)
 		return audit.Record(ctx, q, now, c.Origin, audit.Entry{ActorID: &row.ID, Action: "auth.register", TargetType: "user", TargetID: &row.ID})
 	})
-	switch {
-	case errors.Is(err, errEmailTaken):
+	if errors.Is(err, errEmailTaken) {
 		return s.notifyAlreadyRegistered(ctx, c, email)
-	case err != nil:
-		return err
 	}
-	s.send(ctx, msg)
-	return nil
+	return err
 }
 
 func (s *Service) notifyAlreadyRegistered(ctx context.Context, c Client, email string) error {
@@ -274,19 +259,17 @@ func (s *Service) notifyAlreadyRegistered(ctx context.Context, c Client, email s
 	if err != nil {
 		return err
 	}
-	u, err := q.GetUserByID(ctx, creds.ID)
-	if err != nil {
-		return err
-	}
-	if err := audit.Record(ctx, q, s.clock.Now(), c.Origin, audit.Entry{
-		ActorID: &u.ID, Action: "auth.register_duplicate", TargetType: "user", TargetID: &u.ID,
-	}); err != nil {
-		return err
-	}
-	if u.Status == "active" {
-		s.send(ctx, s.email("already_registered", u.Locale, u.Email, "/login", ""))
-	}
-	return nil
+	now := s.clock.Now()
+	return database.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+		q := dbq.New(tx)
+		if err := audit.Record(ctx, q, now, c.Origin, audit.Entry{
+			ActorID: &creds.ID, Action: "auth.register_duplicate", TargetType: "user", TargetID: &creds.ID,
+		}); err != nil {
+			return err
+		}
+		// The job checks the account is still active before mailing.
+		return enqueueEmail(ctx, q, now, &creds.ID, templateAlreadyRegistered, c.Origin)
+	})
 }
 
 // issueToken revokes live tokens of the purpose and creates a new one, returning the
@@ -341,29 +324,7 @@ func (s *Service) ResendVerification(ctx context.Context, c Client, p Principal)
 	if err := allow(s.limits.ResendPerUser, p.UserID.String()); err != nil {
 		return err
 	}
-	now := s.clock.Now()
-	var msg reefmail.Message
-	err := database.InTx(ctx, s.pool, func(tx pgx.Tx) error {
-		q := dbq.New(tx)
-		u, err := q.GetUserByID(ctx, p.UserID)
-		if err != nil {
-			return err
-		}
-		token, err := s.issueToken(ctx, q, u.ID, u.Email, purposeVerify, now, s.cfg.VerifyTokenTTL)
-		if err != nil {
-			return err
-		}
-		msg = s.email(purposeVerify, u.Locale, u.Email, "/verify-email", token)
-		return nil
-	})
-	if errors.Is(err, errTokenPending) {
-		return nil // a concurrent request already sent one
-	}
-	if err != nil {
-		return err
-	}
-	s.send(ctx, msg)
-	return nil
+	return enqueueEmail(ctx, dbq.New(s.pool), s.clock.Now(), &p.UserID, purposeVerify, c.Origin)
 }
 
 // LoginInput is the sign-in form.
@@ -394,6 +355,10 @@ func (s *Service) Login(ctx context.Context, c Client, in LoginInput) (Session, 
 		if err := s.hasher.VerifyDummy(ctx, in.Password); err != nil {
 			return Session{}, err
 		}
+		// Same single insert as for a real account, so timing doesn't tell them apart.
+		if err := enqueueLoginFailed(ctx, q, s.clock.Now(), nil, c.Origin); err != nil {
+			return Session{}, err
+		}
 		return Session{}, errInvalidCredentials
 	}
 	if err != nil {
@@ -404,15 +369,24 @@ func (s *Service) Login(ctx context.Context, c Client, in LoginInput) (Session, 
 		return Session{}, err
 	}
 	if err != nil {
-		s.log.ErrorContext(ctx, "stored password hash is malformed", "user_id", creds.ID, "err", err)
+		// Erased accounts have an unusable hash on purpose. Take the same path as an
+		// unknown email (dummy hash, one no-op insert) so timing doesn't reveal erasure.
+		if creds.Status != "deactivated" {
+			s.log.ErrorContext(ctx, "stored password hash is malformed", "user_id", creds.ID, "err", err)
+		}
+		if err := s.hasher.VerifyDummy(ctx, in.Password); err != nil {
+			return Session{}, err
+		}
+		if err := enqueueLoginFailed(ctx, q, s.clock.Now(), nil, c.Origin); err != nil {
+			return Session{}, err
+		}
 		return Session{}, errInvalidCredentials
 	}
 	now := s.clock.Now()
 	if !match {
-		userID, origin := creds.ID, c.Origin
-		s.bg.run("audit login failure", func(ctx context.Context) error {
-			return audit.Record(ctx, dbq.New(s.pool), now, origin, audit.Entry{ActorID: &userID, Action: "auth.login_failed", TargetType: "user", TargetID: &userID})
-		})
+		if err := enqueueLoginFailed(ctx, q, now, &creds.ID, c.Origin); err != nil {
+			return Session{}, err
+		}
 		return Session{}, errInvalidCredentials
 	}
 	switch creds.Status {
@@ -518,8 +492,8 @@ func (s *Service) Logout(ctx context.Context, c Client, p Principal) error {
 }
 
 // RequestPasswordReset emails a reset link if the account exists and is active. It
-// always succeeds from the caller's point of view (US-ID-3 AC1); the token is issued in
-// the background so existing and unknown emails take the same time to answer.
+// always succeeds from the caller's point of view (US-ID-3 AC1); the token is issued by
+// the email job so existing and unknown emails take the same time to answer.
 func (s *Service) RequestPasswordReset(ctx context.Context, c Client, rawEmail string) error {
 	email := normalizeEmail(rawEmail)
 	v := apperr.NewValidator()
@@ -534,43 +508,19 @@ func (s *Service) RequestPasswordReset(ctx context.Context, c Client, rawEmail s
 		return err
 	}
 
-	creds, err := dbq.New(s.pool).GetUserCredentialsByEmail(ctx, email)
-	if database.IsNoRows(err) {
-		return nil
-	}
-	if err != nil {
+	q := dbq.New(s.pool)
+	creds, err := q.GetUserCredentialsByEmail(ctx, email)
+	if err != nil && !database.IsNoRows(err) {
 		return err
 	}
-	if creds.Status != "active" {
-		return nil
+	// One job insert whether or not the account exists, so the response time is the same;
+	// the job issues the token and emails only an active account (and a null user is a
+	// no-op).
+	var userID *uuid.UUID
+	if err == nil && creds.Status == "active" {
+		userID = &creds.ID
 	}
-	origin := c.Origin
-	s.bg.run("issue password reset", func(ctx context.Context) error {
-		now := s.clock.Now()
-		var msg reefmail.Message
-		err := database.InTx(ctx, s.pool, func(tx pgx.Tx) error {
-			q := dbq.New(tx)
-			u, err := q.GetUserByID(ctx, creds.ID)
-			if err != nil {
-				return err
-			}
-			token, err := s.issueToken(ctx, q, u.ID, u.Email, purposeReset, now, s.cfg.ResetTokenTTL)
-			if err != nil {
-				return err
-			}
-			msg = s.email(purposeReset, u.Locale, u.Email, "/reset-password", token)
-			return audit.Record(ctx, q, now, origin, audit.Entry{ActorID: &u.ID, Action: "auth.password_reset_requested", TargetType: "user", TargetID: &u.ID})
-		})
-		if errors.Is(err, errTokenPending) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		s.send(ctx, msg)
-		return nil
-	})
-	return nil
+	return enqueueEmail(ctx, q, s.clock.Now(), userID, purposeReset, c.Origin)
 }
 
 // ConfirmPasswordReset sets a new password using a reset token and signs out every
@@ -681,6 +631,9 @@ func (s *Service) ChangePassword(ctx context.Context, c Client, p Principal, cur
 		if err := q.RevokeLiveAuthTokens(ctx, dbq.RevokeLiveAuthTokensParams{UserID: p.UserID, Purpose: purposeReset, Now: now}); err != nil {
 			return err
 		}
+		if err := enqueueEmail(ctx, q, now, &p.UserID, templatePasswordChanged, c.Origin); err != nil {
+			return err
+		}
 		return audit.Record(ctx, q, now, c.Origin, audit.Entry{ActorID: &p.UserID, Action: "auth.password_changed", TargetType: "user", TargetID: &p.UserID})
 	})
 	if err != nil {
@@ -690,7 +643,6 @@ func (s *Service) ChangePassword(ctx context.Context, c Client, p Principal, cur
 	if err != nil {
 		return Session{}, err
 	}
-	s.send(ctx, s.email("password_changed", u.Locale, u.Email, "/forgot-password", ""))
 	return Session{Token: token, CSRFToken: csrfToken(csrfSecret), ExpiresAt: expires, User: u}, nil
 }
 
@@ -732,42 +684,4 @@ func validTimezone(tz string) bool {
 	}
 	_, err := time.LoadLocation(tz)
 	return err == nil
-}
-
-// background runs bounded, best-effort work after a response is sent. When all slots
-// are busy the work is dropped and logged rather than queued without limit; durable
-// processing moves to the job queue (milestone 2.3).
-type background struct {
-	log   *slog.Logger
-	slots chan struct{}
-	wg    sync.WaitGroup
-}
-
-func (b *background) run(name string, fn func(ctx context.Context) error) {
-	select {
-	case b.slots <- struct{}{}:
-	default:
-		b.log.Error("background work dropped: too many in flight", "task", name)
-		return
-	}
-	b.wg.Add(1)
-	go func() {
-		defer func() { <-b.slots; b.wg.Done() }()
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		if err := fn(ctx); err != nil {
-			b.log.Error("background work failed", "task", name, "err", err)
-		}
-	}()
-}
-
-func (b *background) wait(ctx context.Context) error {
-	done := make(chan struct{})
-	go func() { b.wg.Wait(); close(done) }()
-	select {
-	case <-done:
-		return nil
-	case <-ctx.Done():
-		return fmt.Errorf("background work not finished: %w", ctx.Err())
-	}
 }

@@ -204,6 +204,10 @@ CREATE TABLE idempotency_keys (
   PRIMARY KEY (user_id, key)
 );                                            -- purged after 48 h
 
+-- Implemented in db/migrations/00005_jobs.sql with: status 'failed' dropped (a failed run
+-- returns to 'pending' with a later run_at, or becomes 'dead'), locked_by for fencing,
+-- finished_at, payload size limit, and partial indexes jobs_ready (pending by run_at) and
+-- jobs_leased (running by locked_until). The same migration adds users.erased_at.
 CREATE TABLE jobs (
   id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   kind         text NOT NULL,

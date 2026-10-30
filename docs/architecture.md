@@ -123,20 +123,47 @@ details only in logs.
 
 ## 5. Background work
 
-- `jobs` table: `id, kind, dedupe_key UNIQUE, payload JSONB, run_at, status, attempts,
-  max_attempts, last_error, locked_by, locked_until, created_at`.
-- Workers (bounded pool, default 4) poll with `FOR UPDATE SKIP LOCKED`, exponential backoff,
-  `locked_until` lease so crashed workers' jobs are retried.
-- Handlers must be idempotent: they re-check state and use unique constraints
-  (e.g. notification `dedupe_key`).
-- Periodic schedulers (every minute, via a `jobs` row that re-enqueues itself with a dedupe key per
-  time bucket):
-  - `dosing.materialize` — create occurrences for the next 7 days per active plan.
-  - `dosing.mark_missed` — occurrences past grace period → `missed`.
-  - `waterchanges.materialize`, `maintenance.due_check`.
-  - `waterparameters.staleness_check` (daily per tank in tank owner's timezone).
-  - `notifications.deliver_email`.
-- In-memory timers are never the source of truth.
+Implemented in `internal/platform/jobs` (milestone 2.3, decision D3: in-house).
+
+- `jobs` table (`db/migrations/00005_jobs.sql`): `kind`, optional `dedupe_key` (UNIQUE per
+  kind), `payload` JSONB, `run_at`, `status` (`pending`, `running`, `succeeded`, `dead`),
+  `attempts`/`max_attempts`, `locked_by`/`locked_until` (lease), `last_error`, `finished_at`.
+- **Enqueue inside the transaction of the change** (`jobs.Enqueue(ctx, q, now, spec)`), so a
+  rolled-back change never leaves a job and a committed one always has its job.
+- **Claim** pending, due jobs with `FOR UPDATE SKIP LOCKED` (ordered scan of `jobs_ready`, fast
+  for any backlog) under a lease of handler timeout + 30 s. Every 30 s the scheduler re-queues
+  running rows whose lease passed (crashed or stuck worker) and buries those on their last
+  attempt. Outcomes are fenced by worker id **and** attempt number, so a late run — even in the
+  same process — cannot overwrite a newer claim.
+- Instance clocks must be NTP-synchronized to well under the 30 s lease margin; larger skew can
+  run a job twice (still safe because handlers are idempotent).
+- Rows that must be written only for uniform timing (failed logins and reset requests for
+  unknown emails) are inserted as already `succeeded` (`Spec.Completed`), so they never take a
+  worker. Work that must eventually happen (account erasure) is revived when its job died.
+- **Retry** with exponential backoff (15 s doubling, cap 1 h, ±20 % jitter); `jobs.Permanent`
+  errors and the last attempt bury the job as `dead` (kept 30 days; succeeded jobs 7 days).
+- **At-least-once**: handlers are idempotent (re-check state, unique constraints).
+- **Periodic** tasks (`Runner.Every`) are enqueued once per UTC time bucket with the bucket as
+  dedupe key, so any number of instances schedule each run exactly once; handlers catch up on
+  everything due. In-memory timers only *enqueue*; the work itself is durable.
+- **No secrets or addresses in payloads**: email jobs carry a user id and template; tokens are
+  created when the job runs (a retry revokes the unsent token and issues a new one).
+- Workers: `JOB_WORKERS` (default 4) per instance; graceful shutdown stops claiming after the
+  HTTP server drained and lets started jobs finish; past `SHUTDOWN_TIMEOUT` running handlers are
+  cancelled (`Runner.Abort`) and their jobs re-queued after the lease. Metrics: `reefcare_jobs_total{kind,outcome}`,
+  `reefcare_job_duration_seconds{kind}`.
+
+| Kind | Trigger | What |
+|---|---|---|
+| `identity.email` | register, resend, reset request, password change, deletion | issue token if needed, send email |
+| `identity.login_failed` | every failed login (unknown emails too, as a no-op) | audit `auth.login_failed` |
+| `identity.purge_auth` | hourly | delete expired / long-revoked sessions and old tokens |
+| `identity.erase_due` | hourly | enqueue `identity.erase_account` for accounts deactivated > 30 days |
+| `identity.erase_account` | per account | module erasers + anonymize the users row |
+| `jobs.cleanup` | daily | delete old succeeded and dead jobs |
+
+Planned (later milestones): `dosing.materialize`, `dosing.mark_missed`, `waterchanges.materialize`,
+`maintenance.due_check`, `waterparameters.staleness_check`, `notifications.deliver_email`.
 
 ## 6. Configuration
 

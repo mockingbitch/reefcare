@@ -114,10 +114,24 @@ Status: **Draft for review** (Phase 0)
   session and pending email link revoked, confirmation email sent, audited
   (`account.deactivated`), profile hidden and the account's tanks hidden from their viewers
   immediately. The email address stays reserved until erasure (open item S5).
-- Within 30 days a job: deletes private tank data and media; anonymizes authored public content
-  ("Deleted user") unless the user chose deletion of their posts; keeps `reputation_ledger` and
-  `audit_logs` rows with the user id unlinked from personal data, to preserve integrity of others'
-  scores and security records.
+- After 30 days the `identity.erase_account` job (one transaction, idempotent): every module's
+  registered eraser deletes the account's private data (today: owned tanks with their timeline
+  and shares, and shares granted to the account); sessions, email-link tokens and roles are
+  deleted, and queued jobs about the account are removed; the users row is **anonymized, not
+  deleted** (email placeholder `erased:<id>` — not an address, so nobody can register it and
+  block the erasure — unusable password, "Deleted user", no username/bio/preferences, default
+  locale/timezone, `erased_at` set), so
+  `audit_logs` (and later `reputation_ledger`) rows keep a valid id that no longer links to
+  personal data. The original email address can then be registered again. Events the account
+  recorded on other people's tanks stay, attributed to the anonymized row. Later modules add
+  their own eraser (`identity.Service.OnErase`); authored public content (Phase 4) will be
+  anonymized rather than deleted (decision D12).
+- Retained after erasure, on purpose: `audit_logs` rows of the account (action, time, truncated
+  `ip_prefix`, `request_id`) — the audit trigger makes them append-only; their retention period
+  is open item S12. `users.created_at`/`deactivated_at` stay for integrity checks.
+- Signing in to an erased account takes the same path (dummy hash, one no-op insert) as an
+  unknown email, so timing does not reveal that an account was erased. Addresses on the
+  reserved `.invalid` TLD are rejected at registration.
 - Data export (JSON) of own data: Phase 5.
 
 ## 10. Secrets and supply chain

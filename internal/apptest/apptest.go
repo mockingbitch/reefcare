@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -27,6 +28,7 @@ import (
 	"reefcare/internal/identity"
 	"reefcare/internal/platform/clock"
 	"reefcare/internal/platform/database/dbtest"
+	"reefcare/internal/platform/jobs"
 	"reefcare/internal/platform/mail"
 )
 
@@ -38,14 +40,29 @@ const Origin = "http://reefcare.test"
 
 // Outbox records emails instead of sending them.
 type Outbox struct {
-	mu   sync.Mutex
-	msgs []mail.Message
+	mu       sync.Mutex
+	msgs     []mail.Message
+	failNext int
+}
+
+// ErrSMTPDown is what Send returns while failures are injected with FailNext.
+var ErrSMTPDown = errors.New("smtp unavailable")
+
+// FailNext makes the next n sends fail, like an SMTP outage.
+func (o *Outbox) FailNext(n int) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.failNext = n
 }
 
 // Send implements mail.Sender.
 func (o *Outbox) Send(_ context.Context, m mail.Message) error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
+	if o.failNext > 0 {
+		o.failNext--
+		return ErrSMTPDown
+	}
 	o.msgs = append(o.msgs, m)
 	return nil
 }
@@ -102,6 +119,32 @@ type Env struct {
 	Pool   *pgxpool.Pool
 	Clock  *clock.Fixed
 	Outbox *Outbox
+	Jobs   *jobs.Runner
+}
+
+// RunJobs runs every job that is due at the test clock's time (including periodic jobs
+// of the current time bucket) and waits until none is pending or running, including
+// jobs the background runner picked up first and jobs that enqueued further jobs.
+func (e *Env) RunJobs() {
+	e.T.Helper()
+	ctx := context.Background()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		if _, err := e.Jobs.RunDue(ctx); err != nil {
+			e.T.Fatal(err)
+		}
+		var busy int
+		if err := e.Pool.QueryRow(ctx, `SELECT count(*) FROM jobs WHERE status IN ('pending', 'running') AND run_at <= $1`, e.Clock.Now()).Scan(&busy); err != nil {
+			e.T.Fatal(err)
+		}
+		if busy == 0 {
+			return
+		}
+		if time.Now().After(deadline) {
+			e.T.Fatalf("%d due jobs still pending or running", busy)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 // New starts the application on a fresh database. The clock starts at
@@ -110,20 +153,23 @@ func New(t testing.TB) *Env {
 	t.Helper()
 	pool := dbtest.New(t)
 	e := &Env{T: t, Pool: pool, Clock: clock.NewFixed(time.Date(2026, 10, 29, 3, 0, 0, 0, time.UTC)), Outbox: &Outbox{}}
-	h, closeModules := app.NewHTTPHandler(app.Deps{
-		Config: config.Config{PublicBaseURL: Origin, AllowedOrigins: []string{Origin}},
+	application := app.New(app.Deps{
+		Config: config.Config{PublicBaseURL: Origin, AllowedOrigins: []string{Origin}, JobWorkers: 2, JobPollInterval: 5 * time.Millisecond},
 		Log:    slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Pool:   pool, Clock: e.Clock, Mailer: e.Outbox,
 		Argon2: identity.Argon2Params{MemoryKiB: 1024, Iterations: 1, Parallelism: 1},
 	})
-	e.Srv = httptest.NewServer(h)
+	e.Jobs = application.Jobs
+	e.Srv = httptest.NewServer(application.Handler)
+	// Jobs (emails, audits) run in the background like in production; tests that need
+	// them wait (Outbox.WaitFor) or call RunJobs.
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { defer close(done); application.Jobs.Run(ctx) }()
 	t.Cleanup(func() {
 		e.Srv.Close()
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := closeModules(ctx); err != nil {
-			t.Error(err)
-		}
+		cancel()
+		<-done
 	})
 	return e
 }
