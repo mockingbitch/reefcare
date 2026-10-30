@@ -17,6 +17,8 @@ const externalAPI = process.env.E2E_API_URL;
 export default defineConfig({
 	testDir: 'e2e',
 	testMatch: '**/*.e2e.ts',
+	// One shared, verified account for the module tests (see e2e/global-setup.ts).
+	globalSetup: './e2e/global-setup.ts',
 	fullyParallel: false,
 	workers: 1,
 	retries: process.env.CI ? 1 : 0,

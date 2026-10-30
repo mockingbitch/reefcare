@@ -53,7 +53,9 @@ Designer. Detailed, path-scoped rules live in `.claude/rules/` and load automati
   `#lib/dosing.js`; `api()` takes extra headers, e.g. `Idempotency-Key`). Equipment &
   maintenance done (`.../equipment/`, `.../maintenance/`, `#lib/equipment.js`). Note: Svelte
   binds `<input type="number">` as a number — never call string methods on such values.
-  Next in 2.10: livestock, notifications, tank dashboard; 2.1/2.2 once the D5 domain
+  Livestock done (`.../livestock/`, `#lib/livestock.js`). E2E module tests share one account
+  from `web/e2e/global-setup.ts` (registration is rate limited per IP).
+  Next in 2.10: notifications, tank dashboard; 2.1/2.2 once the D5 domain
   reviewer is named.
 - Unfinished work, known gaps and pending decisions are tracked in `docs/open-items.md`;
   update it when an item is completed or a new gap is found.

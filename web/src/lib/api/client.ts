@@ -31,6 +31,11 @@ export type MaintenancePlan = Schemas['MaintenancePlan'];
 export type MaintenancePlanCreate = Schemas['MaintenancePlanCreate'];
 export type MaintenancePlanPatch = Schemas['MaintenancePlanPatch'];
 export type MaintenanceEvent = Schemas['MaintenanceEvent'];
+export type Species = Schemas['Species'];
+export type LivestockEntry = Schemas['LivestockEntry'];
+export type LivestockEntryCreate = Schemas['LivestockEntryCreate'];
+export type LivestockEntryPatch = Schemas['LivestockEntryPatch'];
+export type LivestockEvent = Schemas['LivestockEvent'];
 export type Page<T> = { items: T[]; next_cursor: string | null };
 
 export type ErrorDetail = { field?: string; code: string; params?: Record<string, string> };

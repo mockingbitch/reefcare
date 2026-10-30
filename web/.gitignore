@@ -28,3 +28,6 @@ src/lib/paraglide
 project.inlang/cache/
 playwright-report
 blob-report
+
+# Playwright session of the shared e2e account (contains a session cookie)
+e2e/.auth/

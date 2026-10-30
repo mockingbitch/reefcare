@@ -2,8 +2,8 @@
 
 Last updated: 2026-10-31 · State: Phase 1 done; Phase 2 backend done except 2.1/2.2 (waiting
 on D5): 2.3–2.9 committed on branch `phase-1-foundation`. 2.10 web in progress: water-change
-(2dc0b29) and dosing (321ab17) screens committed; equipment & maintenance screens done;
-livestock, notifications and the tank dashboard remain.
+(2dc0b29), dosing (321ab17), equipment & maintenance (ed1d76d) and livestock screens done;
+notifications and the tank dashboard remain.
 
 Everything below is known to be **not done**, **partially done**, or **waiting on a decision**.
 Sources: the design docs, the db-architect / go-reviewer / security-auditor reviews, and
@@ -108,7 +108,7 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 | LS3 | Transfer between the keeper's own tanks in one step | P3 | Today: `transferred_out` here + a new entry (or `transferred_in`) there |
 | LS4 | Accent-insensitive species search (`unaccent`/trigram index) | P3 | Plain lower-case substring today ("ca he" doesn't find "Cá hề") |
 | LS5 | Structured observation details (symptoms, tissue/colour) | P3 | Phase 3 symptoms/intelligence; only a free-text note today |
-| LS6 | Web screens for livestock | P2 | Milestone 2.10. Domain-review requirements: counting help ("a colony, a frag plug or a rock of zoanthids is 1"; partial die-off is an observation); "rehomed / traded / returned" maps to `transferred_out`; quantity is approximate for algae, pods and clean-up crews |
+| LS6 | ~~Web screens for livestock~~ | done | `web/src/routes/(app)/tanks/[id]/livestock/`: grouped by category with totals, gone groups on request, add with species search or a private species added inline, edit description, events (losses / arrivals / observations with hints: "missing" is never a death, "moved out / rehomed / traded / returned"), reconcile dialog; counting help ("a colony, a frag plug or a rock of zoanthids is 1", approximate counts for algae, pods and clean-up crews). Adds, events and reconciliations send an `Idempotency-Key`. e2e `web/e2e/livestock.e2e.ts` with axe |
 | LS7 | Enforce `current_quantity = Σ deltas` in the database | P3 | Go-only today (under the entry lock, tested); a deferred constraint trigger could recompute it (≤ 2000 moves per entry) |
 | LS8 | Frag lineage (`parent_entry_id`) and approximate counts | P3 | From the domain review; also coral size / tissue extent later |
 | LS9 | Search depends on the database locale for `lower()` of Vietnamese | P3 | Works with en_US.utf8; pin the production locale or solve with LS4 |
@@ -158,6 +158,7 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 | R1 | Work is on branch `phase-1-foundation`; nothing merged to `master` | P1 | The remote exists (GitHub) and the branch is pushed, but no PR is open | Open a PR to `master`; check that CI ran (F8) |
 | R7 | `.claude/settings.json` hooks call `/home/feng/.local/bin/graphify`, an absolute path from one machine | P2 | On other machines (e.g. macOS) the hook command does not exist; the hooks fail on every Bash/Grep/Read/Glob call (non-blocking, but noisy and not doing their job) | Install graphify on every dev machine and call it via `PATH` or `$CLAUDE_PROJECT_DIR`, or move these hooks to each developer's `.claude/settings.local.json` |
 | R8 | E2E without local Go | P3 | `web/playwright.config.ts` now accepts `E2E_API_URL` to use an API that is already running (e.g. in Docker) instead of `go run` | Documented in web/README.md |
+| R9 | E2E registration budget | P3 | Registration allows 5 per hour per IP and all e2e traffic shares one address. Module tests now share one account from `web/e2e/global-setup.ts` (3 sign-ups per run). Two local runs within an hour against the same API still hit the limit: restart the API to clear its in-memory limiter |
 | R4 | Go module path is `reefcare`; no remote repository | P3 | — | Rename to `github.com/<org>/reefcare` once it exists |
 
 ## 7. Open product and infrastructure decisions

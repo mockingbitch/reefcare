@@ -48,6 +48,10 @@ export function errorMessage(e: ApiError): string {
 			return m.err_plan_completed();
 		case 'equipment_removed':
 			return m.err_equipment_removed();
+		case 'quantity_underflow':
+			return m.err_quantity_underflow();
+		case 'quantity_overflow':
+			return m.err_quantity_overflow();
 		case 'idempotency_key_reused':
 			return m.err_idempotency_key_reused();
 		case 'already_verified':
@@ -141,6 +145,16 @@ export function fieldMessage(d: ErrorDetail): string {
 			return m.f_not_allowed();
 		case 'equipment_not_found':
 			return m.f_equipment_not_found();
+		case 'before_added':
+			return m.f_before_added();
+		case 'species_not_found':
+			return m.f_species_not_found();
+		case 'species_mismatch':
+			return m.f_species_mismatch();
+		case 'coral_only':
+			return m.f_coral_only();
+		case 'name_required':
+			return m.f_name_required();
 		case 'equipment_removed':
 			return m.err_equipment_removed();
 		case 'before_purchase':

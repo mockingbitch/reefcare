@@ -1,6 +1,10 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
-import { signUp, t, uniqueEmail } from './helpers';
+import { storageState } from './global-setup';
+import { t } from './helpers';
+
+// Signed in as the shared keeper account; each test creates its own tank.
+test.use({ storageState });
 
 async function expectAccessible(page: Page) {
 	const results = await new AxeBuilder({ page })
@@ -11,7 +15,6 @@ async function expectAccessible(page: Page) {
 
 test('products, a daily plan, confirming a dose and an unplanned dose', async ({ page }) => {
 	test.setTimeout(120_000);
-	await signUp(page, uniqueEmail('dose'), 'Lan');
 
 	await page.goto('/tanks/new');
 	await page.getByLabel(t.field_name, { exact: true }).fill('Mixed reef');

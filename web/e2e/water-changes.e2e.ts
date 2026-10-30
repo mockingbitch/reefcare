@@ -1,6 +1,10 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
-import { signUp, t, uniqueEmail } from './helpers';
+import { storageState } from './global-setup';
+import { t } from './helpers';
+
+// Signed in as the shared keeper account; each test creates its own tank.
+test.use({ storageState });
 
 async function expectAccessible(page: Page) {
 	const results = await new AxeBuilder({ page })
@@ -21,7 +25,6 @@ async function createTank(page: Page, name: string): Promise<string> {
 
 test('schedule, record and complete water changes', async ({ page }) => {
 	test.setTimeout(120_000);
-	await signUp(page, uniqueEmail('wc'), 'Lan');
 	await createTank(page, 'Nano SPS');
 
 	await page.getByRole('link', { name: t.tank_section_water_changes }).click();
