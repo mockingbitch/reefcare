@@ -1,0 +1,133 @@
+# Runs the /verify checklist (docs/architecture.md §9) on every push and pull request.
+name: ci
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18@sha256:979bccfde35445db618c65107d27d08c6c21339d8dc3ad4c830c6633947be0e4
+        env:
+          POSTGRES_USER: reefcare
+          POSTGRES_PASSWORD: reefcare
+          POSTGRES_DB: reefcare_test
+        ports: ["4002:5432"]
+        options: >-
+          --health-cmd "pg_isready -U reefcare -d reefcare_test"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+      - name: Format
+        run: make fmt-check
+      - name: sqlc drift
+        run: make sqlc-check
+      - name: Vet and lint
+        run: make lint
+      - name: Unit tests
+        run: make test
+      - name: Integration tests (incl. migrations up/down/up and OpenAPI route check)
+        run: make test-integration
+      - name: Vulnerabilities
+        run: make vuln
+      - name: Build
+        run: make build
+
+  web:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: API types match api/openapi.yaml
+        run: npm run gen:api && git diff --exit-code -- src/lib/api/schema.d.ts
+      - name: Type check
+        run: npm run check
+      - name: Lint
+        run: npm run lint
+      - name: Unit and component tests
+        run: npx playwright install --with-deps chromium && npm test
+      - name: Build
+        run: npm run build
+      - name: Audit runtime dependencies
+        run: npm audit --omit=dev
+
+  e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    needs: [go, web]
+    services:
+      postgres:
+        image: postgres:18@sha256:979bccfde35445db618c65107d27d08c6c21339d8dc3ad4c830c6633947be0e4
+        env:
+          POSTGRES_USER: reefcare
+          POSTGRES_PASSWORD: reefcare
+          POSTGRES_DB: reefcare
+        ports: ["4002:5432"]
+        options: >-
+          --health-cmd "pg_isready -U reefcare -d reefcare"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+      mailpit:
+        image: axllent/mailpit:v1.29@sha256:757f22b56c1da03570afdb3d259effe5091018008a81bbedc8158cee7e16fdbc
+        ports: ["4004:1025", "4003:8025"]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install
+        working-directory: web
+        run: npm ci && npx playwright install --with-deps chromium
+      - name: End-to-end tests (real API, PostgreSQL and Mailpit)
+        working-directory: web
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: playwright-traces
+          path: web/test-results/
+          retention-days: 7
+
+  docker:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: Build image
+        run: docker build --pull -t reefcare-api:ci .

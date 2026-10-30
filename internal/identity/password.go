@@ -11,7 +11,6 @@ import (
 	"runtime"
 	"strings"
 	"time"
-	"unicode"
 	"unicode/utf8"
 
 	"golang.org/x/crypto/argon2"
@@ -176,16 +175,4 @@ func passwordProblem(password, email string) string {
 		return "matches_email"
 	}
 	return ""
-}
-
-// hasControlChars reports characters that must never appear in names shown to other
-// people or placed in emails: control (Cc, including CR/LF) and format (Cf, including
-// bidi overrides) characters.
-func hasControlChars(s string) bool {
-	for _, r := range s {
-		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
-			return true
-		}
-	}
-	return false
 }

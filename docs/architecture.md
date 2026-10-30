@@ -110,6 +110,11 @@ method touching tank data. For resources addressed by their own ID (`/dosing-pla
 service loads the resource's `tank_id` first (single query joining ownership), then authorizes.
 Failure on read → `ErrNotFound`; failure on write after read is permitted → `ErrForbidden`.
 
+Module data access: a module owns its tables, but may read another module's tables
+through its own sqlc queries when it only needs a few stable columns. Today `tanks` reads
+`users.id`, `status`, `email_verified_at`, `display_name` and `username` (owner state,
+share grantees). Writes to another module's tables always go through that module's service.
+
 ### Errors
 Domain/service errors are typed (`apperr.NotFound`, `apperr.Validation{Fields}`,
 `apperr.Conflict{Code}`, `apperr.Forbidden`, `apperr.RateLimited`). A single HTTP mapper converts

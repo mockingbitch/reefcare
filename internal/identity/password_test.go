@@ -26,19 +26,6 @@ func TestDeriveGivesUpWhenSlotsAreBusy(t *testing.T) {
 	}
 }
 
-func TestHasControlChars(t *testing.T) {
-	for _, s := range []string{"Lan\nNguyen", "Lan\r", "a\u202Eb", "tab\there", "zero\u200Bwidth"} {
-		if !hasControlChars(s) {
-			t.Errorf("%q should be rejected", s)
-		}
-	}
-	for _, s := range []string{"Lan Nguyễn", "Rạn san hô 🐠", "O'Brien-Smith"} {
-		if hasControlChars(s) {
-			t.Errorf("%q should be allowed", s)
-		}
-	}
-}
-
 func TestHashAndVerify(t *testing.T) {
 	h := NewHasher(testParams, 0)
 	encoded, err := h.Hash(ctx, "correct horse battery")

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 
@@ -22,6 +23,8 @@ import (
 	"reefcare/internal/platform/httpserver"
 	"reefcare/internal/platform/logging"
 	"reefcare/internal/platform/mail"
+	"reefcare/internal/platform/metrics"
+	"reefcare/internal/tanks"
 )
 
 const usage = `usage: api [command]
@@ -111,6 +114,8 @@ type Deps struct {
 	Mailer mail.Sender
 	Argon2 identity.Argon2Params
 	Ready  map[string]httpserver.ReadinessCheck
+	// Metrics is optional; when set, every request is recorded.
+	Metrics *metrics.Metrics
 }
 
 // NewHTTPHandler wires every module into the root router. The returned close function
@@ -119,14 +124,21 @@ func NewHTTPHandler(d Deps) (http.Handler, func(context.Context) error) {
 	idSvc := identity.NewService(d.Pool, d.Clock, identity.NewHasher(d.Argon2, d.Config.Argon2MaxConcurrent), d.Mailer,
 		identity.DefaultLimits(d.Clock), identity.DefaultConfig(d.Config.PublicBaseURL), d.Log)
 	idHTTP := identity.NewHandler(idSvc, d.Log, d.Config.SecureCookies())
+	tankHTTP := tanks.NewHandler(tanks.NewService(d.Pool, d.Clock, tanks.DefaultLimits(d.Clock), d.Log), idHTTP.RequireAuth, d.Log)
 
+	var observe func(http.Handler) http.Handler
+	if d.Metrics != nil {
+		observe = d.Metrics.Middleware
+	}
 	return httpserver.NewRouter(d.Log, httpserver.Options{
+		Observe:        observe,
 		Ready:          d.Ready,
 		TrustedProxies: d.Config.TrustedProxies,
 		AllowedOrigins: d.Config.AllowedOrigins,
 		Mount: func(api chi.Router) {
 			api.Use(idHTTP.Authenticate)
 			idHTTP.Mount(api)
+			tankHTTP.Mount(api)
 		},
 	}), idSvc.Close
 }
@@ -157,8 +169,12 @@ func serve(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	}
 	mailer := mail.NewAsync(sender, log, 1000)
 
+	var metricsReg *metrics.Metrics
+	if cfg.MetricsAddr != "" {
+		metricsReg = metrics.New(pool)
+	}
 	router, closeModules := NewHTTPHandler(Deps{
-		Config: cfg, Log: log, Pool: pool, Clock: clock.System{}, Mailer: mailer,
+		Config: cfg, Log: log, Pool: pool, Clock: clock.System{}, Mailer: mailer, Metrics: metricsReg,
 		Argon2: identity.DefaultArgon2Params,
 		Ready: map[string]httpserver.ReadinessCheck{
 			"database":   pool.Ping,
@@ -179,14 +195,28 @@ func serve(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		}
 	}()
 
-	errCh := make(chan error, 1)
+	errCh := make(chan error, 2)
 	go func() {
 		log.Info("http server listening", "addr", cfg.HTTPAddr, "env", cfg.Env)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}
-		close(errCh)
 	}()
+	var metricsSrv *http.Server
+	if metricsReg != nil {
+		if host, _, _ := net.SplitHostPort(cfg.MetricsAddr); cfg.IsProduction() && (host == "" || host == "0.0.0.0" || host == "::") {
+			log.Warn("metrics listen on every interface; keep the port off public networks (firewall or private bind address)", "addr", cfg.MetricsAddr)
+		}
+		mux := http.NewServeMux()
+		mux.Handle("GET /metrics", metricsReg.Handler())
+		metricsSrv = httpserver.NewServer(cfg.MetricsAddr, mux)
+		go func() {
+			log.Info("metrics listening", "addr", cfg.MetricsAddr)
+			if err := metricsSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				errCh <- fmt.Errorf("metrics: %w", err)
+			}
+		}()
+	}
 
 	select {
 	case err := <-errCh:
@@ -197,6 +227,10 @@ func serve(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	log.Info("shutting down", "timeout", cfg.ShutdownTimeout)
 	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cfg.ShutdownTimeout)
 	defer cancel()
+	if metricsSrv != nil {
+		// Metrics stay up while the API drains, then stop.
+		defer func() { _ = metricsSrv.Shutdown(shutdownCtx) }()
+	}
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("graceful shutdown: %w", err)
 	}

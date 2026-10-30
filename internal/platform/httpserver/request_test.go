@@ -10,13 +10,43 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"reefcare/internal/platform/apperr"
 )
 
 type createTank struct {
-	Name   string `json:"name"`
-	Volume int    `json:"volume"`
+	Name   string    `json:"name"`
+	Volume int       `json:"volume"`
+	Owner  uuid.UUID `json:"owner"`
+	Notes  textField `json:"notes"`
+	Dims   *struct {
+		Length int `json:"length"`
+	} `json:"dims"`
+	Patch dimsField `json:"patch"`
 }
+
+// dimsField decodes a nested object strictly, like patch.Field does.
+type dimsField struct{ Length int }
+
+func (f *dimsField) UnmarshalJSON(b []byte) error {
+	dec := json.NewDecoder(strings.NewReader(string(b)))
+	dec.DisallowUnknownFields()
+	var v struct {
+		Length int `json:"length"`
+	}
+	if err := dec.Decode(&v); err != nil {
+		return err
+	}
+	f.Length = v.Length
+	return nil
+}
+
+// textField mimics patch.Field: a custom unmarshaler, whose errors encoding/json
+// reports without a field name.
+type textField struct{ v string }
+
+func (f *textField) UnmarshalJSON(b []byte) error { return json.Unmarshal(b, &f.v) }
 
 func jsonRequest(body, contentType string) *http.Request {
 	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
@@ -43,6 +73,11 @@ func TestDecodeJSON(t *testing.T) {
 		{name: "syntax error", body: `{"name":`, contentType: "application/json", wantKind: apperr.KindBadRequest, wantCode: "malformed_json"},
 		{name: "unknown field", body: `{"name":"x","owner_id":"y"}`, contentType: "application/json", wantKind: apperr.KindBadRequest, wantCode: "unknown_field", wantField: "owner_id"},
 		{name: "wrong type", body: `{"volume":"sixty"}`, contentType: "application/json", wantKind: apperr.KindBadRequest, wantCode: "malformed_json", wantField: "volume"},
+		{name: "wrong type in custom field", body: `{"notes":42}`, contentType: "application/json", wantKind: apperr.KindBadRequest, wantCode: "malformed_json", wantField: "notes"},
+		{name: "miscased custom field", body: `{"Notes":42}`, contentType: "application/json", wantKind: apperr.KindBadRequest, wantCode: "malformed_json", wantField: "notes"},
+		{name: "unknown nested member", body: `{"dims":{"length":1,"depth":2}}`, contentType: "application/json", wantKind: apperr.KindBadRequest, wantCode: "unknown_field", wantField: "dims.depth"},
+		{name: "unknown nested member in custom field", body: `{"patch":{"depth":2}}`, contentType: "application/json", wantKind: apperr.KindBadRequest, wantCode: "unknown_field", wantField: "patch.depth"},
+		{name: "invalid uuid", body: `{"owner":"not-a-uuid"}`, contentType: "application/json", wantKind: apperr.KindBadRequest, wantCode: "malformed_json", wantField: "owner"},
 		{name: "trailing data", body: `{"name":"a"}{"name":"b"}`, contentType: "application/json", wantKind: apperr.KindBadRequest, wantCode: "malformed_json"},
 	}
 	for _, tt := range tests {

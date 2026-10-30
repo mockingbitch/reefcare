@@ -16,15 +16,22 @@ Designer. Detailed, path-scoped rules live in `.claude/rules/` and load automati
 
 - Phase 0 design docs in `docs/` were accepted with the proposed defaults for D1–D12
   (2026-10-29); the docs are the source of truth for design decisions.
-- Active phase: **Phase 1 — Foundation**. Milestone 1.1 (skeleton, config, logging, chi server,
+- Phase 1 — Foundation is complete (2026-10-30). Milestone 1.1 (skeleton, config, logging, chi server,
   health/readiness, graceful shutdown, pgx pool, embedded Goose migrations, Docker/Compose,
   Makefile, golangci-lint) is done. 1.2 (sqlc → `internal/db/dbq`, `database.InTx`,
   `dbtest.New` per-test databases, identity schema + queries) and 1.3 (`apperr` typed errors,
   `httpserver.DecodeJSON` / `WriteAppError` / pagination / `ClientIP`, `ratelimit`) are done.
   1.4 identity is done (`internal/identity`: register, verify email, login/logout, sessions
   with auth_epoch revocation, CSRF, password reset/change, audit, async mail via
-  `internal/platform/mail`), reviewed by db-architect, go-reviewer and security-auditor with
-  findings fixed. Next: 1.5 profile (PATCH /me, account deactivation), then 1.6 tanks.
+  `internal/platform/mail`). 1.5 profile (`PATCH`/`DELETE /me`, logout-all), 1.6 tanks
+  (`internal/tanks` with `Authorizer`, shares, `internal/timeline` recorder), 1.7 CI
+  (`.github/workflows/ci.yml`, Renovate) and `api/openapi.yaml` (route-sync test in
+  `internal/app`) are done and reviewed (2026-10-30). Shared helpers: `platform/decimal`
+  (exact numerics ↔ `numeric`), `platform/patch` (merge-patch fields), `platform/textcheck`,
+  `platform/metrics`, `internal/apptest` (API integration harness).
+  1.8 web shell is done (`web/`: SvelteKit 3 SPA, paraglide vi/en, typed client generated
+  from `api/openapi.yaml`, Playwright e2e with axe; see `web/README.md`). **Phase 1 is
+  complete.** Next: Phase 2 (2.1 parameter catalog + unit conversion, needs D5 reviewer).
 - Unfinished work, known gaps and pending decisions are tracked in `docs/open-items.md`;
   update it when an item is completed or a new gap is found.
 - Go module path is `reefcare`. Migrations use sequential numbering (`make migration name=...`).
@@ -96,7 +103,7 @@ rework; otherwise choose a reasonable default and document it. Use the `/feature
 ## Commands
 
 ```sh
-make up / down / logs   # dev stack: postgres 18, mailpit, migrate, api (:8080)
+make up / down / logs   # dev stack (host ports 4000 API · 4001 web · 4002 postgres · 4003/4004 mailpit)
 make fmt | fmt-check    # gofmt
 make lint               # go vet (incl. integration tag) + golangci-lint v2 (container)
 make test               # unit tests, -race
@@ -105,7 +112,9 @@ make build | vuln       # bin/api | govulncheck
 make migration name=x   # new sequential Goose migration
 make migrate-up | migrate-down | migrate-status
 make sqlc | sqlc-check  # sqlc 1.31 (container), config db/sqlc.yaml
-# Not yet available: web checks (milestone 1.8)
+# Metrics: METRICS_ADDR (compose :9090, internal only) → GET /metrics
+make web-install | web-dev | web-check | web-test | web-build | web-api-check | web-audit
+make web-e2e            # Playwright vs real API (needs `docker compose up -d db mailpit`)
 ```
 
 If a command does not exist yet or a tool is missing locally, say so — never report a check as

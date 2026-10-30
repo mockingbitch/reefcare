@@ -4,6 +4,7 @@ package config
 import (
 	"fmt"
 	"log/slog"
+	"net"
 	"net/netip"
 	"net/url"
 	"strconv"
@@ -20,8 +21,11 @@ const (
 
 // Config is the complete, validated runtime configuration.
 type Config struct {
-	Env             string
-	HTTPAddr        string
+	Env      string
+	HTTPAddr string
+	// MetricsAddr serves Prometheus metrics on a separate listener that must not be
+	// exposed publicly; empty disables metrics.
+	MetricsAddr     string
 	PublicBaseURL   string
 	ShutdownTimeout time.Duration
 	TrustedProxies  []netip.Prefix
@@ -63,6 +67,7 @@ func Load(lookup func(string) (string, bool)) (Config, error) {
 	cfg := Config{
 		Env:                 p.oneOf("APP_ENV", EnvDevelopment, EnvDevelopment, EnvTest, EnvProduction),
 		HTTPAddr:            p.str("HTTP_ADDR", ":8080"),
+		MetricsAddr:         p.str("METRICS_ADDR", ""),
 		PublicBaseURL:       p.str("PUBLIC_BASE_URL", ""),
 		ShutdownTimeout:     p.duration("SHUTDOWN_TIMEOUT", 30*time.Second),
 		TrustedProxies:      p.proxyPrefixes("TRUSTED_PROXY_CIDRS"),
@@ -88,6 +93,14 @@ func Load(lookup func(string) (string, bool)) (Config, error) {
 		}
 		if _, set := p.get("MAIL_FROM"); !set {
 			p.fail("MAIL_FROM", "is required in production")
+		}
+	}
+
+	if cfg.MetricsAddr != "" {
+		if _, _, err := net.SplitHostPort(cfg.MetricsAddr); err != nil {
+			p.fail("METRICS_ADDR", "must be host:port or :port")
+		} else if cfg.MetricsAddr == cfg.HTTPAddr {
+			p.fail("METRICS_ADDR", "must differ from HTTP_ADDR (metrics stay off the public listener)")
 		}
 	}
 

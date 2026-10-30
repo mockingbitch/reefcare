@@ -12,6 +12,7 @@ import (
 	"reefcare/internal/audit"
 	"reefcare/internal/platform/apperr"
 	"reefcare/internal/platform/httpserver"
+	"reefcare/internal/platform/patch"
 )
 
 const (
@@ -71,7 +72,7 @@ func (h *Handler) Authenticate(next http.Handler) http.Handler {
 }
 
 // RequireAuth rejects requests without a valid session, and state-changing requests
-// whose X-CSRF-Token does not match the session.
+// whose X-CSRF-Token does not match the session or that exceed the user's write budget.
 func (h *Handler) RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p, ok := PrincipalFrom(r.Context())
@@ -84,9 +85,18 @@ func (h *Handler) RequireAuth(next http.Handler) http.Handler {
 			httpserver.WriteAppError(w, r, h.log, err)
 			return
 		}
-		if !httpserver.IsSafeMethod(r.Method) && !p.ValidCSRF(r.Header.Get(csrfHeader)) {
-			httpserver.WriteError(w, r, http.StatusForbidden, "csrf_failed", "Missing or invalid CSRF token.")
-			return
+		if !httpserver.IsSafeMethod(r.Method) {
+			if !p.ValidCSRF(r.Header.Get(csrfHeader)) {
+				httpserver.WriteError(w, r, http.StatusForbidden, "csrf_failed", "Missing or invalid CSRF token.")
+				return
+			}
+			// The general write budget (docs/api-guidelines.md §6) is charged only after
+			// the CSRF check, so forged requests cannot drain a victim's budget.
+			// Endpoints with stricter limits keep them as well.
+			if err := allow(h.svc.limits.WritesPerUser, p.UserID.String()); err != nil {
+				h.fail(w, r, err)
+				return
+			}
 		}
 		next.ServeHTTP(w, r)
 	})
@@ -103,12 +113,15 @@ func (h *Handler) Mount(r chi.Router) {
 		r.Group(func(r chi.Router) {
 			r.Use(h.RequireAuth)
 			r.Post("/logout", h.logout)
+			r.Post("/logout-all", h.logoutAll)
 			r.Post("/verify-email/resend", h.resendVerification)
 		})
 	})
 	r.Group(func(r chi.Router) {
 		r.Use(h.RequireAuth)
 		r.Get("/me", h.me)
+		r.Patch("/me", h.updateMe)
+		r.Delete("/me", h.deleteMe)
 		r.Post("/me/password", h.changePassword)
 	})
 }
@@ -127,25 +140,28 @@ func client(r *http.Request) Client {
 }
 
 type userResponse struct {
-	ID              uuid.UUID `json:"id"`
-	Email           string    `json:"email"`
-	EmailVerified   bool      `json:"email_verified"`
-	DisplayName     string    `json:"display_name"`
-	Username        *string   `json:"username"`
-	Bio             *string   `json:"bio"`
-	ExperienceLevel *string   `json:"experience_level"`
-	Locale          string    `json:"locale"`
-	Timezone        string    `json:"timezone"`
-	Roles           []string  `json:"roles"`
-	CreatedAt       time.Time `json:"created_at"`
-	Version         int32     `json:"version"`
+	ID              uuid.UUID         `json:"id"`
+	Email           string            `json:"email"`
+	EmailVerified   bool              `json:"email_verified"`
+	DisplayName     string            `json:"display_name"`
+	Username        *string           `json:"username"`
+	Bio             *string           `json:"bio"`
+	ExperienceLevel *string           `json:"experience_level"`
+	Locale          string            `json:"locale"`
+	Timezone        string            `json:"timezone"`
+	UnitPrefs       map[string]string `json:"unit_prefs"`
+	NotifyPrefs     map[string]bool   `json:"notification_prefs"`
+	Roles           []string          `json:"roles"`
+	CreatedAt       time.Time         `json:"created_at"`
+	Version         int32             `json:"version"`
 }
 
 func toUserResponse(u User) userResponse {
 	return userResponse{
 		ID: u.ID, Email: u.Email, EmailVerified: u.EmailVerified, DisplayName: u.DisplayName,
 		Username: u.Username, Bio: u.Bio, ExperienceLevel: u.ExperienceLevel, Locale: u.Locale,
-		Timezone: u.Timezone, Roles: u.Roles, CreatedAt: u.CreatedAt.UTC(), Version: u.Version,
+		Timezone: u.Timezone, UnitPrefs: u.UnitPrefs, NotifyPrefs: u.NotifyPrefs, Roles: u.Roles,
+		CreatedAt: u.CreatedAt.UTC(), Version: u.Version,
 	}
 }
 
@@ -341,4 +357,66 @@ func (h *Handler) clearCookies(w http.ResponseWriter) {
 			HttpOnly: base == sessionCookie, Secure: h.secureCookie, SameSite: http.SameSiteLaxMode,
 		})
 	}
+}
+
+func (h *Handler) logoutAll(w http.ResponseWriter, r *http.Request) {
+	p, _ := PrincipalFrom(r.Context())
+	if err := h.svc.LogoutAll(r.Context(), client(r), p); err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	h.clearCookies(w)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type updateMeRequest struct {
+	Version           *int32                          `json:"version"`
+	DisplayName       patch.Field[string]             `json:"display_name"`
+	Username          patch.Field[string]             `json:"username"`
+	Bio               patch.Field[string]             `json:"bio"`
+	ExperienceLevel   patch.Field[string]             `json:"experience_level"`
+	Locale            patch.Field[string]             `json:"locale"`
+	Timezone          patch.Field[string]             `json:"timezone"`
+	UnitPrefs         patch.Field[map[string]*string] `json:"unit_prefs"`
+	NotificationPrefs patch.Field[map[string]*bool]   `json:"notification_prefs"`
+}
+
+func (h *Handler) updateMe(w http.ResponseWriter, r *http.Request) {
+	var req updateMeRequest
+	if err := httpserver.DecodeJSON(r, &req); err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	p, _ := PrincipalFrom(r.Context())
+	u, err := h.svc.UpdateProfile(r.Context(), p, ProfilePatch(req))
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	httpserver.WriteJSON(w, r, http.StatusOK, toUserResponse(u))
+}
+
+type deleteMeRequest struct {
+	Password string `json:"password"`
+}
+
+type deleteMeResponse struct {
+	Status     string    `json:"status"`
+	EraseAfter time.Time `json:"erase_after"`
+}
+
+func (h *Handler) deleteMe(w http.ResponseWriter, r *http.Request) {
+	var req deleteMeRequest
+	if err := httpserver.DecodeJSON(r, &req); err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	p, _ := PrincipalFrom(r.Context())
+	eraseAfter, err := h.svc.DeleteAccount(r.Context(), client(r), p, req.Password)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	h.clearCookies(w)
+	httpserver.WriteJSON(w, r, http.StatusAccepted, deleteMeResponse{Status: "deactivated", EraseAfter: eraseAfter.UTC()})
 }

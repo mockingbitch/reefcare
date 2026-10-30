@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,20 +26,106 @@ func DecodeJSON(r *http.Request, dst any) error {
 		return &apperr.Error{Kind: apperr.KindUnsupportedMedia, Code: "unsupported_media_type", Message: "Content-Type must be application/json."}
 	}
 
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(dst); err != nil {
+	// The body is buffered (LimitBody caps it) so a failing custom-typed field can be
+	// located afterwards; see locateField.
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
 		return decodeError(err)
 	}
+	dec := json.NewDecoder(bytes.NewReader(body))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(dst); err != nil {
+		return decodeError(locateField(body, dst, err))
+	}
 	if err := dec.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		var maxErr *http.MaxBytesError
-		if errors.As(err, &maxErr) {
-			return decodeError(err)
-		}
 		return apperr.BadRequest("malformed_json", "Request body must contain a single JSON object.")
 	}
 	return nil
 }
+
+// locateField adds the field name to err when encoding/json could not: errors returned
+// by custom UnmarshalJSON methods (patch.Field, UUIDs, …) carry no field context, and
+// unknown members of nested objects are reported without their parent. Each top-level
+// member is decoded on its own into the matching struct field; the first one that fails
+// names the field. Other errors are returned unchanged.
+func locateField(body []byte, dst any, err error) error {
+	var typeErr *json.UnmarshalTypeError
+	var syntaxErr *json.SyntaxError
+	unknown, isUnknown := strings.CutPrefix(err.Error(), "json: unknown field ")
+	switch {
+	case errors.As(err, &typeErr) && typeErr.Field != "",
+		errors.As(err, &syntaxErr), errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF):
+		return err
+	}
+	t := reflect.TypeOf(dst)
+	for t != nil && t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	if t == nil || t.Kind() != reflect.Struct {
+		return err
+	}
+	var members map[string]json.RawMessage
+	if json.Unmarshal(body, &members) != nil {
+		return err
+	}
+	if isUnknown {
+		if _, topLevel := members[strings.Trim(unknown, `"`)]; topLevel {
+			return err
+		}
+	}
+	for i := range t.NumField() {
+		f := t.Field(i)
+		name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
+		if name == "" || name == "-" {
+			continue
+		}
+		raw, ok := member(members, name)
+		if !ok {
+			continue
+		}
+		dec := json.NewDecoder(bytes.NewReader(raw))
+		dec.DisallowUnknownFields()
+		fieldErr := dec.Decode(reflect.New(f.Type).Interface())
+		if fieldErr == nil {
+			continue
+		}
+		if child, ok := strings.CutPrefix(fieldErr.Error(), "json: unknown field "); ok {
+			return fmt.Errorf("json: unknown field %q", name+"."+strings.Trim(child, `"`))
+		}
+		if errors.As(fieldErr, &typeErr) {
+			located := *typeErr
+			located.Field = name
+			if typeErr.Field != "" {
+				located.Field = name + "." + typeErr.Field
+			}
+			return &located
+		}
+		return &fieldError{field: name, err: fieldErr}
+	}
+	return err
+}
+
+// member finds a JSON member the way encoding/json matches struct fields: exact name
+// first, then case-insensitively.
+func member(members map[string]json.RawMessage, name string) (json.RawMessage, bool) {
+	if raw, ok := members[name]; ok {
+		return raw, true
+	}
+	for k, raw := range members {
+		if strings.EqualFold(k, name) {
+			return raw, true
+		}
+	}
+	return nil, false
+}
+
+// fieldError is a value a custom unmarshaler rejected (e.g. a malformed UUID).
+type fieldError struct {
+	field string
+	err   error
+}
+
+func (e *fieldError) Error() string { return e.field + ": " + e.err.Error() }
 
 // jsonKind names the expected JSON type for a Go type, so clients never see Go type names.
 func jsonKind(t reflect.Type) string {
@@ -66,6 +153,7 @@ func decodeError(err error) error {
 		syntaxErr *json.SyntaxError
 		typeErr   *json.UnmarshalTypeError
 		maxErr    *http.MaxBytesError
+		fieldErr  *fieldError
 	)
 	switch {
 	case errors.As(err, &maxErr):
@@ -78,6 +166,9 @@ func decodeError(err error) error {
 	case errors.As(err, &typeErr):
 		return apperr.BadRequest("malformed_json", "A field has the wrong type.",
 			apperr.FieldError{Field: typeErr.Field, Code: "wrong_type", Params: map[string]string{"expected": jsonKind(typeErr.Type)}})
+	case errors.As(err, &fieldErr):
+		return apperr.BadRequest("malformed_json", "A field has an invalid value.",
+			apperr.FieldError{Field: fieldErr.field, Code: "invalid"})
 	case strings.HasPrefix(err.Error(), "json: unknown field "):
 		// encoding/json exposes no typed error for unknown fields.
 		field := strings.Trim(strings.TrimPrefix(err.Error(), "json: unknown field "), `"`)

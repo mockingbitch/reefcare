@@ -57,6 +57,9 @@ type Limits struct {
 	ResetPerEmail, ResetPerIP, ResetPerNet          *ratelimit.Limiter
 	ResetConfirmPerIP, VerifyPerIP, ResendPerUser   *ratelimit.Limiter
 	PasswordChangePerUser                           *ratelimit.Limiter
+	// WritesPerUser is the general budget for state-changing requests of a signed-in
+	// user (docs/api-guidelines.md §6), applied by Handler.RequireAuth.
+	WritesPerUser *ratelimit.Limiter
 }
 
 // DefaultLimits returns the documented limits.
@@ -75,6 +78,7 @@ func DefaultLimits(clk clock.Clock) Limits {
 		VerifyPerIP:           ratelimit.New(20, 15*time.Minute, clk),
 		ResendPerUser:         ratelimit.New(3, time.Hour, clk),
 		PasswordChangePerUser: ratelimit.New(10, 15*time.Minute, clk),
+		WritesPerUser:         ratelimit.New(120, time.Minute, clk),
 	}
 }
 
@@ -105,6 +109,8 @@ type User struct {
 	ExperienceLevel *string
 	Locale          string
 	Timezone        string
+	UnitPrefs       map[string]string
+	NotifyPrefs     map[string]bool
 	Roles           []string
 	CreatedAt       time.Time
 	Version         int32
@@ -212,11 +218,7 @@ func (s *Service) Register(ctx context.Context, c Client, in RegisterInput) erro
 
 	v := apperr.NewValidator()
 	v.Check(validEmail(email), "email", "invalid_email", nil)
-	if n := utf8.RuneCountInString(name); n < 1 || n > 60 {
-		v.Add("display_name", "length", map[string]string{"min": "1", "max": "60"})
-	} else if hasControlChars(name) {
-		v.Add("display_name", "invalid_characters", nil)
-	}
+	validateDisplayName(v, name)
 	v.Check(locale == "vi" || locale == "en", "locale", "unsupported", nil)
 	v.Check(validTimezone(tz), "timezone", "invalid_timezone", nil)
 	if p := passwordProblem(in.Password, email); p != "" {
@@ -249,7 +251,7 @@ func (s *Service) Register(ctx context.Context, c Client, in RegisterInput) erro
 		if err != nil {
 			return err
 		}
-		token, err := s.issueToken(ctx, q, row.ID, purposeVerify, now, s.cfg.VerifyTokenTTL)
+		token, err := s.issueToken(ctx, q, row.ID, email, purposeVerify, now, s.cfg.VerifyTokenTTL)
 		if err != nil {
 			return err
 		}
@@ -289,7 +291,7 @@ func (s *Service) notifyAlreadyRegistered(ctx context.Context, c Client, email s
 
 // issueToken revokes live tokens of the purpose and creates a new one, returning the
 // client-facing token. It must run inside a transaction.
-func (s *Service) issueToken(ctx context.Context, q *dbq.Queries, userID uuid.UUID, purpose string, now time.Time, ttl time.Duration) (string, error) {
+func (s *Service) issueToken(ctx context.Context, q *dbq.Queries, userID uuid.UUID, email, purpose string, now time.Time, ttl time.Duration) (string, error) {
 	_, token, err := newSecret()
 	if err != nil {
 		return "", err
@@ -298,7 +300,7 @@ func (s *Service) issueToken(ctx context.Context, q *dbq.Queries, userID uuid.UU
 		return "", err
 	}
 	err = q.CreateAuthToken(ctx, dbq.CreateAuthTokenParams{
-		UserID: userID, Purpose: purpose, TokenHash: hashToken(token), Now: now, ExpiresAt: now.Add(ttl),
+		UserID: userID, Purpose: purpose, TokenHash: hashToken(token), Email: email, Now: now, ExpiresAt: now.Add(ttl),
 	})
 	if database.IsUniqueViolation(err, "auth_tokens_one_live") {
 		return "", errTokenPending
@@ -347,7 +349,7 @@ func (s *Service) ResendVerification(ctx context.Context, c Client, p Principal)
 		if err != nil {
 			return err
 		}
-		token, err := s.issueToken(ctx, q, u.ID, purposeVerify, now, s.cfg.VerifyTokenTTL)
+		token, err := s.issueToken(ctx, q, u.ID, u.Email, purposeVerify, now, s.cfg.VerifyTokenTTL)
 		if err != nil {
 			return err
 		}
@@ -552,7 +554,7 @@ func (s *Service) RequestPasswordReset(ctx context.Context, c Client, rawEmail s
 			if err != nil {
 				return err
 			}
-			token, err := s.issueToken(ctx, q, u.ID, purposeReset, now, s.cfg.ResetTokenTTL)
+			token, err := s.issueToken(ctx, q, u.ID, u.Email, purposeReset, now, s.cfg.ResetTokenTTL)
 			if err != nil {
 				return err
 			}
@@ -712,10 +714,15 @@ func (s *Service) user(ctx context.Context, q *dbq.Queries, id uuid.UUID) (User,
 	if err != nil {
 		return User{}, err
 	}
+	units, notify, err := decodePrefs(u.UnitPrefs, u.NotificationPrefs)
+	if err != nil {
+		return User{}, err
+	}
 	return User{
 		ID: u.ID, Email: u.Email, EmailVerified: u.EmailVerifiedAt != nil, DisplayName: u.DisplayName,
 		Username: u.Username, Bio: u.Bio, ExperienceLevel: u.ExperienceLevel, Locale: u.Locale,
-		Timezone: u.Timezone, Roles: roles, CreatedAt: u.CreatedAt, Version: u.Version,
+		Timezone: u.Timezone, UnitPrefs: units, NotifyPrefs: notify, Roles: roles, CreatedAt: u.CreatedAt,
+		Version: u.Version,
 	}, nil
 }
 

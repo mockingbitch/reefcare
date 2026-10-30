@@ -17,12 +17,13 @@ GO_INTEGRATION    := $(DOCKER_GO_RUN) --network $(COMPOSE_NETWORK) \
 GOFMT             := $(DOCKER_GO_RUN) $(GO_IMAGE) gofmt
 else
 GO                := go
-GO_INTEGRATION    := TEST_DATABASE_URL=postgres://reefcare:reefcare@localhost:5432/reefcare_test?sslmode=disable go
+GO_INTEGRATION    := TEST_DATABASE_URL=postgres://reefcare:reefcare@localhost:4002/reefcare_test?sslmode=disable go
 GOFMT             := gofmt
 endif
 
 .PHONY: help fmt fmt-check vet lint test test-integration build vuln check sqlc sqlc-check \
-        up down logs migrate-up migrate-down migrate-status migration
+        up down logs migrate-up migrate-down migrate-status migration \
+        web-install web-dev web-check web-test web-build web-api-check web-audit web-e2e
 
 help: ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  %-18s %s\n",$$1,$$2}'
@@ -83,3 +84,29 @@ migration: ## Create a new sequential migration: make migration name=create_user
 	next=$$(printf "%05d" $$(( $${last:-0} + 1 ))); \
 	file=db/migrations/$${next}_$(name).sql; \
 	printf -- '-- +goose Up\n\n-- +goose Down\n' > $$file; echo "created $$file"
+
+# --- Web (SvelteKit, web/) ------------------------------------------------------------
+
+web-install: ## Install web dependencies exactly as locked
+	cd web && npm ci
+
+web-dev: ## SvelteKit dev server on :4001 (proxies /api to :4000; run `make up` first)
+	cd web && npm run dev
+
+web-check: ## Type check (svelte-check), prettier and eslint
+	cd web && npm run check && npm run lint
+
+web-test: ## Unit and component tests (component tests run in headless Chromium)
+	cd web && npm test
+
+web-build: ## Static build into web/build
+	cd web && npm run build
+
+web-api-check: ## Fail if web/src/lib/api/schema.d.ts is out of date with api/openapi.yaml
+	cd web && npm run gen:api >/dev/null && git diff --exit-code -- src/lib/api/schema.d.ts
+
+web-audit: ## npm audit of runtime dependencies
+	cd web && npm audit --omit=dev
+
+web-e2e: ## Playwright end-to-end tests (needs `docker compose up -d db mailpit`)
+	cd web && npm run test:e2e

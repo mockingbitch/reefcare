@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"reefcare/internal/platform/decimal"
 )
 
 type AuditLog struct {
@@ -33,6 +34,50 @@ type AuthToken struct {
 	ExpiresAt time.Time
 	UsedAt    *time.Time
 	RevokedAt *time.Time
+	Email     string
+}
+
+type Tank struct {
+	ID             uuid.UUID
+	OwnerID        uuid.UUID
+	Name           string
+	Description    *string
+	TankType       string
+	Status         string
+	LengthCm       *decimal.Decimal
+	WidthCm        *decimal.Decimal
+	HeightCm       *decimal.Decimal
+	DisplayVolumeL decimal.Decimal
+	SumpVolumeL    *decimal.Decimal
+	SystemVolumeL  decimal.Decimal
+	SetupDate      *time.Time
+	WaterSource    *string
+	SaltMix        *string
+	ArchivedAt     *time.Time
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	Version        int32
+}
+
+type TankEvent struct {
+	ID         uuid.UUID
+	TankID     uuid.UUID
+	OccurredAt time.Time
+	Category   string
+	EventType  string
+	SourceType string
+	SourceID   uuid.UUID
+	ActorID    *uuid.UUID
+	Summary    json.RawMessage
+	CreatedAt  time.Time
+}
+
+type TankShare struct {
+	TankID     uuid.UUID
+	UserID     uuid.UUID
+	Permission string
+	GrantedBy  *uuid.UUID
+	CreatedAt  time.Time
 }
 
 type User struct {

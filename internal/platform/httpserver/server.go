@@ -28,6 +28,8 @@ type Options struct {
 	AllowedOrigins []string
 	// Mount registers feature-module routes on the /api/v1 sub-router.
 	Mount func(api chi.Router)
+	// Observe, when set, wraps every request (e.g. metrics.Middleware).
+	Observe func(http.Handler) http.Handler
 }
 
 // NewRouter builds the root router with shared middleware and health endpoints.
@@ -36,7 +38,11 @@ func NewRouter(log *slog.Logger, opts Options) http.Handler {
 	// Order matters: ClientIP decides whether RequestID may trust an incoming ID, and
 	// LimitBody must see the server's own ResponseWriter so oversized requests close
 	// the connection after the reply.
-	r.Use(ClientIP(opts.TrustedProxies), RequestID, LimitBody(maxJSONBody), AccessLog(log), Recover(log), SecurityHeaders)
+	r.Use(ClientIP(opts.TrustedProxies), RequestID, LimitBody(maxJSONBody), AccessLog(log))
+	if opts.Observe != nil {
+		r.Use(opts.Observe)
+	}
+	r.Use(Recover(log), SecurityHeaders)
 
 	r.Get("/healthz", handleHealthz)
 	r.Get("/readyz", handleReadyz(log, opts.Ready))

@@ -92,8 +92,8 @@ func TestConstraints(t *testing.T) {
 		{"full ipv4 address in audit", `INSERT INTO audit_logs (actor_id, action, ip_prefix) VALUES ($1, 'auth.login', '203.0.113.57/32')`},
 		{"host bits in ipv4 prefix", `INSERT INTO audit_logs (actor_id, action, ip_prefix) VALUES ($1, 'auth.login', '203.0.113.57/24')`},
 		{"ipv6 longer than /48", `INSERT INTO audit_logs (actor_id, action, ip_prefix) VALUES ($1, 'auth.login', '2001:db8:abcd:12::/64')`},
-		{"token expiring before creation", `INSERT INTO auth_tokens (user_id, purpose, token_hash, created_at, expires_at)
-			VALUES ($1, 'verify_email', decode(repeat('ab', 32), 'hex'), now(), now() - interval '1 second')`},
+		{"token expiring before creation", `INSERT INTO auth_tokens (user_id, purpose, token_hash, email, created_at, expires_at)
+			VALUES ($1, 'verify_email', decode(repeat('ab', 32), 'hex'), 'x@example.com', now(), now() - interval '1 second')`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -128,11 +128,15 @@ func issueToken(t *testing.T, pool *pgxpool.Pool, userID uuid.UUID, purpose stri
 	tokenHash := hash32(t)
 	err := database.InTx(context.Background(), pool, func(tx pgx.Tx) error {
 		q := dbq.New(tx)
+		u, err := q.GetUserByID(context.Background(), userID)
+		if err != nil {
+			return err
+		}
 		if err := q.RevokeLiveAuthTokens(context.Background(), dbq.RevokeLiveAuthTokensParams{UserID: userID, Purpose: purpose, Now: now}); err != nil {
 			return err
 		}
 		return q.CreateAuthToken(context.Background(), dbq.CreateAuthTokenParams{
-			UserID: userID, Purpose: purpose, TokenHash: tokenHash, Now: now, ExpiresAt: now.Add(time.Hour),
+			UserID: userID, Purpose: purpose, TokenHash: tokenHash, Email: u.Email, Now: now, ExpiresAt: now.Add(time.Hour),
 		})
 	})
 	return tokenHash, err

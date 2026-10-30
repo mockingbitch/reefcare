@@ -6,8 +6,12 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"reefcare/db"
 	"reefcare/internal/platform/database"
@@ -54,5 +58,51 @@ func TestMigrationsUpDownUp(t *testing.T) {
 	}
 	if err := m.CheckCompatible(ctx); err != nil {
 		t.Fatalf("after second up: %v", err)
+	}
+}
+
+// Two transactions that each read what the other writes cannot both commit under
+// SERIALIZABLE; the loser is re-run and then succeeds.
+func TestInSerializableTxRetries(t *testing.T) {
+	pool := dbtest.New(t)
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, `CREATE TABLE ledger (k text PRIMARY KEY, v int NOT NULL); INSERT INTO ledger VALUES ('a', 0), ('b', 0)`); err != nil {
+		t.Fatal(err)
+	}
+	var attempts atomic.Int32
+	ready := make(chan struct{})
+	var once sync.Once
+	run := func(read, write string) error {
+		return database.InSerializableTx(ctx, pool, func(tx pgx.Tx) error {
+			n := attempts.Add(1)
+			var sum int
+			if err := tx.QueryRow(ctx, `SELECT sum(v) FROM ledger WHERE k = $1`, read).Scan(&sum); err != nil {
+				return err
+			}
+			if n <= 2 { // make the first two attempts overlap
+				once.Do(func() { close(ready) })
+				<-ready
+				time.Sleep(50 * time.Millisecond)
+			}
+			_, err := tx.Exec(ctx, `UPDATE ledger SET v = v + 1 WHERE k = $1`, write)
+			return err
+		})
+	}
+	var wg sync.WaitGroup
+	errs := make([]error, 2)
+	wg.Go(func() { errs[0] = run("a", "b") })
+	wg.Go(func() { errs[1] = run("b", "a") })
+	wg.Wait()
+	for _, err := range errs {
+		if err != nil {
+			t.Fatalf("transaction failed despite retry: %v", err)
+		}
+	}
+	if attempts.Load() < 3 {
+		t.Fatalf("attempts = %d, want a retry", attempts.Load())
+	}
+	var total int
+	if err := pool.QueryRow(ctx, `SELECT sum(v) FROM ledger`).Scan(&total); err != nil || total != 2 {
+		t.Fatalf("total = %d, err %v", total, err)
 	}
 }

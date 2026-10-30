@@ -1,0 +1,14 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":semanticCommitTypeAll(chore)", "helpers:pinGitHubActionDigests"],
+  "timezone": "Asia/Ho_Chi_Minh",
+  "schedule": ["before 9am on monday"],
+  "postUpdateOptions": ["gomodTidy"],
+  "labels": ["dependencies"],
+  "vulnerabilityAlerts": { "labels": ["security"], "schedule": ["at any time"] },
+  "packageRules": [
+    { "matchManagers": ["gomod"], "matchUpdateTypes": ["minor", "patch"], "groupName": "go dependencies" },
+    { "matchManagers": ["github-actions"], "groupName": "github actions" },
+    { "matchDatasources": ["docker"], "matchPackageNames": ["postgres"], "allowedVersions": "<19" }
+  ]
+}

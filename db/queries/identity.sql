@@ -108,13 +108,15 @@ WHERE user_id = @user_id AND purpose = @purpose AND used_at IS NULL AND revoked_
 -- name: CreateAuthToken :exec
 -- Fails with a unique violation (auth_tokens_one_live) if another live token of the
 -- same purpose was issued concurrently; the service treats that as "already sent".
-INSERT INTO auth_tokens (user_id, purpose, token_hash, created_at, expires_at)
-VALUES (@user_id, @purpose, @token_hash, @now, @expires_at);
+INSERT INTO auth_tokens (user_id, purpose, token_hash, email, created_at, expires_at)
+VALUES (@user_id, @purpose, @token_hash, @email, @now, @expires_at);
 
 -- name: ConsumeAuthToken :one
 -- Atomically marks a live token used and returns its user with their status. A second
--- call with the same token returns no rows. Run inside the transaction that performs the
--- token's effect so a failure rolls the consumption back.
+-- call with the same token returns no rows, and so does a token sent to an address the
+-- account no longer has (callers roll back, so such a token stays unusable until it
+-- expires; it can never succeed). Run inside the transaction that
+-- performs the token's effect so a failure rolls the consumption back.
 WITH consumed AS (
     UPDATE auth_tokens
     SET used_at = sqlc.arg(now)::timestamptz
@@ -123,8 +125,42 @@ WITH consumed AS (
       AND used_at IS NULL
       AND revoked_at IS NULL
       AND expires_at > @now
-    RETURNING user_id
+    RETURNING user_id, email
 )
 SELECT u.id AS user_id, u.status, u.email_verified_at
 FROM consumed c
-JOIN users u ON u.id = c.user_id;
+JOIN users u ON u.id = c.user_id AND u.email = c.email;
+
+-- name: UpdateUserProfile :execrows
+-- Optimistic lock: 0 rows means the version is stale (or the account is gone).
+UPDATE users
+SET display_name = @display_name, username = sqlc.narg(username), bio = sqlc.narg(bio),
+    experience_level = sqlc.narg(experience_level), locale = @locale, timezone = @timezone,
+    unit_prefs = @unit_prefs, notification_prefs = @notification_prefs,
+    updated_at = @now, version = version + 1
+WHERE id = @id AND version = @version AND status = 'active';
+
+-- name: DeactivateUser :execrows
+-- Account deletion request (docs/security.md §9). Bumping auth_epoch invalidates every
+-- session atomically, including logins racing this update.
+UPDATE users
+SET status = 'deactivated', deactivated_at = sqlc.arg(now)::timestamptz, auth_epoch = auth_epoch + 1,
+    updated_at = sqlc.arg(now)::timestamptz
+WHERE id = @id AND status = 'active';
+
+-- name: RevokeAllLiveAuthTokens :exec
+UPDATE auth_tokens SET revoked_at = sqlc.arg(now)::timestamptz
+WHERE user_id = @user_id AND used_at IS NULL AND revoked_at IS NULL;
+
+-- name: FindShareGranteeByEmail :one
+-- Only active accounts that proved control of their address can receive shares, so an
+-- account squatting on someone else's unverified email never gets their tanks.
+SELECT id FROM users WHERE email = @email AND status = 'active' AND email_verified_at IS NOT NULL;
+
+-- name: FindShareGranteeByUsername :one
+SELECT id FROM users
+WHERE username = sqlc.arg(username)::citext AND status = 'active' AND email_verified_at IS NOT NULL;
+
+-- name: LockUserRow :exec
+-- Serializes per-user checks such as "at most N tanks" against concurrent creates.
+SELECT id FROM users WHERE id = @id FOR NO KEY UPDATE;

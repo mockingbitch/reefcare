@@ -1,7 +1,7 @@
 # ReefCare — API Guidelines and Initial Contracts
 
-Status: **Draft for review** (Phase 0). The machine-readable contract will live in
-`api/openapi.yaml` (OpenAPI 3.1) and must match the implementation.
+Status: accepted (Phase 0); implemented endpoints are specified in `api/openapi.yaml`
+(OpenAPI 3.1), which must match the implementation (`internal/app/openapi_test.go`).
 
 ## 1. Conventions
 
@@ -80,12 +80,13 @@ share), `[verified]` (verified email), `[mod]`, `[admin]`.
 | POST | `/api/v1/auth/verify-email/resend` | auth | 202; 409 `already_verified`; 3/hour per user |
 | POST | `/api/v1/auth/login` | public | 200 `{user, csrf_token}` + cookie; rate limited |
 | POST | `/api/v1/auth/logout` | auth | 204 |
+| POST | `/api/v1/auth/logout-all` | auth | 204; revokes every session including the current one; audited |
 | POST | `/api/v1/auth/password-reset/request` | public | 202 always |
 | POST | `/api/v1/auth/password-reset/confirm` | public | `{token, new_password}` → 204, revokes all sessions; 10/15 min per IP |
 | GET | `/api/v1/me` | auth | profile + preferences + roles |
-| PATCH | `/api/v1/me` | auth | display_name, bio, experience_level, locale, timezone, unit_prefs, notification_prefs |
+| PATCH | `/api/v1/me` | auth | merge patch, `version` required: display_name, username, bio, experience_level, locale, timezone, unit_prefs, notification_prefs (preference keys merge; `null` removes a key) → 200 user; 409 `version_conflict` / `username_taken` |
 | POST | `/api/v1/me/password` | auth | `{current_password, new_password}` → 200 `{csrf_token}`; revokes other sessions, rotates the current session (new cookies + CSRF token), emails a notification; wrong current password → 422 field `current_password` |
-| DELETE | `/api/v1/me` | auth | requires password; 202 |
+| DELETE | `/api/v1/me` | auth | `{password}` → 202 `{status: "deactivated", erase_after}`; deactivates, revokes all sessions and pending email links, emails a confirmation; erasure after 30 days (job, open item J4) |
 
 ```jsonc
 // POST /api/v1/auth/register
@@ -96,13 +97,17 @@ share), `[verified]` (verified email), `[mod]`, `[admin]`.
 ### Tanks
 | Method | Path | Auth |
 |---|---|---|
-| GET | `/api/v1/tanks` | auth — owned + shared, `?include=shared` |
-| POST | `/api/v1/tanks` | auth |
+| GET | `/api/v1/tanks` | auth — owned tanks, newest first; `?include=shared,archived` adds shared and archived tanks; each item has `access: owner\|viewer` |
+| POST | `/api/v1/tanks` | auth — 201 + `Location`; max 100 tanks per owner |
 | GET | `/api/v1/tanks/{tankID}` | reader |
-| PATCH | `/api/v1/tanks/{tankID}` | owner (`version` required) |
-| POST | `/api/v1/tanks/{tankID}/archive` | owner |
-| GET/POST | `/api/v1/tanks/{tankID}/shares` | owner |
-| DELETE | `/api/v1/tanks/{tankID}/shares/{userID}` | owner |
+| PATCH | `/api/v1/tanks/{tankID}` | owner (`version` required); archived → 409 `tank_archived` |
+| POST | `/api/v1/tanks/{tankID}/archive` | owner — terminal and idempotent |
+| GET | `/api/v1/tanks/{tankID}/shares` | owner — grantee id, display name, username (never the email) |
+| POST | `/api/v1/tanks/{tankID}/shares` | owner with verified email — `{email}` or `{username}`; 30/hour per owner; max 20 per tank |
+| DELETE | `/api/v1/tanks/{tankID}/shares/{userID}` | owner, or the viewer removing themselves |
+
+A malformed `tankID` is answered like an unknown one (404). Viewers get 403 `forbidden` on
+writes; anyone else gets 404.
 | GET | `/api/v1/tanks/{tankID}/dashboard` | reader — latest readings, freshness, upcoming tasks, recent events (one round trip) |
 | GET | `/api/v1/tanks/{tankID}/timeline` | reader — `?category=dosing,livestock&from=&to=&cursor=` |
 
@@ -227,7 +232,8 @@ Completion response includes `estimate: {fraction_of_system: "0.14", assumptions
 |---|---|
 | login | 10 / 15 min per email, 30 / 15 min per IP |
 | register, password reset | 5 / hour per IP and per email |
-| writes (general) | 120 / min per user |
+| writes (general) | 120 / min per user (all non-GET requests of a signed-in user) |
+| tank shares | 30 / hour per owner (the answer reveals whether an account exists) |
 | on-demand assessments | 10 / day per tank |
 | community posts / comments / votes (R2) | 10 / 60 / 200 per hour per user |
 

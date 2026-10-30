@@ -46,11 +46,11 @@ WITH consumed AS (
       AND used_at IS NULL
       AND revoked_at IS NULL
       AND expires_at > $1
-    RETURNING user_id
+    RETURNING user_id, email
 )
 SELECT u.id AS user_id, u.status, u.email_verified_at
 FROM consumed c
-JOIN users u ON u.id = c.user_id
+JOIN users u ON u.id = c.user_id AND u.email = c.email
 `
 
 type ConsumeAuthTokenParams struct {
@@ -66,8 +66,10 @@ type ConsumeAuthTokenRow struct {
 }
 
 // Atomically marks a live token used and returns its user with their status. A second
-// call with the same token returns no rows. Run inside the transaction that performs the
-// token's effect so a failure rolls the consumption back.
+// call with the same token returns no rows, and so does a token sent to an address the
+// account no longer has (callers roll back, so such a token stays unusable until it
+// expires; it can never succeed). Run inside the transaction that
+// performs the token's effect so a failure rolls the consumption back.
 func (q *Queries) ConsumeAuthToken(ctx context.Context, arg ConsumeAuthTokenParams) (ConsumeAuthTokenRow, error) {
 	row := q.db.QueryRow(ctx, consumeAuthToken, arg.Now, arg.TokenHash, arg.Purpose)
 	var i ConsumeAuthTokenRow
@@ -76,14 +78,15 @@ func (q *Queries) ConsumeAuthToken(ctx context.Context, arg ConsumeAuthTokenPara
 }
 
 const createAuthToken = `-- name: CreateAuthToken :exec
-INSERT INTO auth_tokens (user_id, purpose, token_hash, created_at, expires_at)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO auth_tokens (user_id, purpose, token_hash, email, created_at, expires_at)
+VALUES ($1, $2, $3, $4, $5, $6)
 `
 
 type CreateAuthTokenParams struct {
 	UserID    uuid.UUID
 	Purpose   string
 	TokenHash []byte
+	Email     string
 	Now       time.Time
 	ExpiresAt time.Time
 }
@@ -95,6 +98,7 @@ func (q *Queries) CreateAuthToken(ctx context.Context, arg CreateAuthTokenParams
 		arg.UserID,
 		arg.Purpose,
 		arg.TokenHash,
+		arg.Email,
 		arg.Now,
 		arg.ExpiresAt,
 	)
@@ -172,6 +176,53 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 	var i CreateUserRow
 	err := row.Scan(&i.ID, &i.CreatedAt)
 	return i, err
+}
+
+const deactivateUser = `-- name: DeactivateUser :execrows
+UPDATE users
+SET status = 'deactivated', deactivated_at = $1::timestamptz, auth_epoch = auth_epoch + 1,
+    updated_at = $1::timestamptz
+WHERE id = $2 AND status = 'active'
+`
+
+type DeactivateUserParams struct {
+	Now time.Time
+	ID  uuid.UUID
+}
+
+// Account deletion request (docs/security.md §9). Bumping auth_epoch invalidates every
+// session atomically, including logins racing this update.
+func (q *Queries) DeactivateUser(ctx context.Context, arg DeactivateUserParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deactivateUser, arg.Now, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const findShareGranteeByEmail = `-- name: FindShareGranteeByEmail :one
+SELECT id FROM users WHERE email = $1 AND status = 'active' AND email_verified_at IS NOT NULL
+`
+
+// Only active accounts that proved control of their address can receive shares, so an
+// account squatting on someone else's unverified email never gets their tanks.
+func (q *Queries) FindShareGranteeByEmail(ctx context.Context, email string) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, findShareGranteeByEmail, email)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const findShareGranteeByUsername = `-- name: FindShareGranteeByUsername :one
+SELECT id FROM users
+WHERE username = $1::citext AND status = 'active' AND email_verified_at IS NOT NULL
+`
+
+func (q *Queries) FindShareGranteeByUsername(ctx context.Context, username string) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, findShareGranteeByUsername, username)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
 const getActiveSessionByTokenHash = `-- name: GetActiveSessionByTokenHash :one
@@ -349,6 +400,16 @@ func (q *Queries) ListUserRoles(ctx context.Context, userID uuid.UUID) ([]string
 	return items, nil
 }
 
+const lockUserRow = `-- name: LockUserRow :exec
+SELECT id FROM users WHERE id = $1 FOR NO KEY UPDATE
+`
+
+// Serializes per-user checks such as "at most N tanks" against concurrent creates.
+func (q *Queries) LockUserRow(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, lockUserRow, id)
+	return err
+}
+
 const markEmailVerified = `-- name: MarkEmailVerified :execrows
 UPDATE users
 SET email_verified_at = $1::timestamptz, updated_at = $1::timestamptz
@@ -394,6 +455,21 @@ func (q *Queries) RehashUserPassword(ctx context.Context, arg RehashUserPassword
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const revokeAllLiveAuthTokens = `-- name: RevokeAllLiveAuthTokens :exec
+UPDATE auth_tokens SET revoked_at = $1::timestamptz
+WHERE user_id = $2 AND used_at IS NULL AND revoked_at IS NULL
+`
+
+type RevokeAllLiveAuthTokensParams struct {
+	Now    time.Time
+	UserID uuid.UUID
+}
+
+func (q *Queries) RevokeAllLiveAuthTokens(ctx context.Context, arg RevokeAllLiveAuthTokensParams) error {
+	_, err := q.db.Exec(ctx, revokeAllLiveAuthTokens, arg.Now, arg.UserID)
+	return err
 }
 
 const revokeLiveAuthTokens = `-- name: RevokeLiveAuthTokens :exec
@@ -506,6 +582,50 @@ type TouchSessionParams struct {
 // never extends past the absolute expiry. Callers throttle this to avoid a write per request.
 func (q *Queries) TouchSession(ctx context.Context, arg TouchSessionParams) (int64, error) {
 	result, err := q.db.Exec(ctx, touchSession, arg.Now, arg.IdleExpiresAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateUserProfile = `-- name: UpdateUserProfile :execrows
+UPDATE users
+SET display_name = $1, username = $2, bio = $3,
+    experience_level = $4, locale = $5, timezone = $6,
+    unit_prefs = $7, notification_prefs = $8,
+    updated_at = $9, version = version + 1
+WHERE id = $10 AND version = $11 AND status = 'active'
+`
+
+type UpdateUserProfileParams struct {
+	DisplayName       string
+	Username          *string
+	Bio               *string
+	ExperienceLevel   *string
+	Locale            string
+	Timezone          string
+	UnitPrefs         json.RawMessage
+	NotificationPrefs json.RawMessage
+	Now               time.Time
+	ID                uuid.UUID
+	Version           int32
+}
+
+// Optimistic lock: 0 rows means the version is stale (or the account is gone).
+func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateUserProfile,
+		arg.DisplayName,
+		arg.Username,
+		arg.Bio,
+		arg.ExperienceLevel,
+		arg.Locale,
+		arg.Timezone,
+		arg.UnitPrefs,
+		arg.NotificationPrefs,
+		arg.Now,
+		arg.ID,
+		arg.Version,
+	)
 	if err != nil {
 		return 0, err
 	}

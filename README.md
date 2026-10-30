@@ -11,13 +11,16 @@ contributor and AI-assistant conventions are in [CLAUDE.md](CLAUDE.md).
 ## Quick start
 
 ```sh
-make up                 # postgres 18, mailpit, migrations, API on http://localhost:8080
-curl localhost:8080/readyz
+make up                 # postgres 18, mailpit, migrations, API on http://localhost:4000
+curl localhost:4000/readyz
 make logs               # follow API logs
 make down               # stop (data volume is kept)
 ```
 
-Mailpit UI: http://localhost:8025.
+Host ports are in the 4000 range: API 4000, web dev server 4001, PostgreSQL 4002, Mailpit UI
+http://localhost:4003, Mailpit SMTP 4004 (override with `API_PORT`, `POSTGRES_PORT`,
+`MAILPIT_UI_PORT`, `MAILPIT_SMTP_PORT`). Email links point at the web dev server
+(http://localhost:4001).
 
 ## Development
 
@@ -30,6 +33,15 @@ make vuln               # govulncheck
 make migration name=create_users   # new sequential Goose migration in db/migrations
 make migrate-status | migrate-up | migrate-down
 ```
+
+Web app: see [web/README.md](web/README.md) (`make web-install web-dev`, then
+http://localhost:4001).
+
+CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs the same targets on every push and
+pull request — fmt-check, sqlc-check, lint, unit and integration tests against a PostgreSQL 18
+service, govulncheck, build — the web checks (types, lint, unit/component tests, build,
+`npm audit`), Playwright end-to-end tests against the real API, and a Docker image build. Dependency updates come from Renovate
+([renovate.json](renovate.json)).
 
 ## API binary
 
@@ -47,13 +59,14 @@ reported at once. See `internal/config/config.go` and [docs/architecture.md](doc
 |---|---|---|
 | `APP_ENV` | `development` | `development`, `test`, `production` |
 | `HTTP_ADDR` | `:8080` | |
+| `METRICS_ADDR` | — (disabled) | separate listener for Prometheus `GET /metrics`; must differ from `HTTP_ADDR` and must not be exposed publicly (compose: `:9090`, not published) |
 | `PUBLIC_BASE_URL` | — | required (https) in production |
 | `SHUTDOWN_TIMEOUT` | `30s` | graceful shutdown budget |
 | `TRUSTED_PROXY_CIDRS` | — | comma-separated CIDRs/IPs of reverse proxies whose `X-Forwarded-For` and `X-Request-ID` are trusted; required in production; ranges wider than /8 (IPv4) or /32 (IPv6) are rejected |
 | `DATABASE_URL` | — | required, `postgres://…` |
 | `DB_MAX_CONNS` | `10` | 1–500 |
 | `DB_CONNECT_TIMEOUT` | `5s` | |
-| `ALLOWED_ORIGINS` | — | extra origins (besides `PUBLIC_BASE_URL`'s) allowed to send state-changing requests, e.g. `http://localhost:5173` |
+| `ALLOWED_ORIGINS` | — | extra origins (besides `PUBLIC_BASE_URL`'s) allowed to send state-changing requests, e.g. `http://localhost:4001` |
 | `SMTP_HOST` / `SMTP_PORT` | — / `587` | required in production (STARTTLS enforced there); without it, dev only logs that an email would be sent |
 | `SMTP_USERNAME` / `SMTP_PASSWORD` | — | optional SMTP auth |
 | `MAIL_FROM` | `ReefCare <no-reply@localhost>` | required in production |
@@ -67,6 +80,11 @@ reported at once. See `internal/config/config.go` and [docs/architecture.md](doc
 |---|---|
 | `GET /healthz` | liveness — process is up |
 | `GET /readyz` | readiness — database reachable and schema at least the version embedded in the binary (503 otherwise) |
-| `/api/v1/auth/*`, `/api/v1/me` | registration, email verification, login/logout, password reset and change — see [docs/api-guidelines.md](docs/api-guidelines.md) §5 |
+| `/api/v1/auth/*` | registration, email verification, login/logout, logout of all sessions, password reset |
+| `/api/v1/me` | profile and preferences (`GET`/`PATCH`), password change, account deletion (`DELETE`) |
+| `/api/v1/tanks` | tank CRUD/archive and read-only sharing |
 
-Emails sent in development are visible in Mailpit at http://localhost:8025.
+The full contract is [api/openapi.yaml](api/openapi.yaml) (OpenAPI 3.1); a unit test fails when
+it and the router disagree. Conventions are in [docs/api-guidelines.md](docs/api-guidelines.md).
+
+Emails sent in development are visible in Mailpit at http://localhost:4003.

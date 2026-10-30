@@ -37,6 +37,12 @@ var emailTemplates = map[string]map[string]emailTemplate{
 		"en": {"Your ReefCare password was changed",
 			"Hello,\n\nYour ReefCare password was just changed and your other sessions were signed out. If this wasn't you, reset your password now at:\n\n%s\n"},
 	},
+	"account_deactivated": {
+		"vi": {"Tài khoản ReefCare của bạn đã bị vô hiệu hoá",
+			"Xin chào,\n\nTài khoản ReefCare của bạn vừa được vô hiệu hoá theo yêu cầu và mọi phiên đăng nhập đã bị đăng xuất. Dữ liệu cá nhân sẽ bị xoá hoặc ẩn danh sau 30 ngày.\n\nNếu không phải bạn yêu cầu, hãy trả lời email này ngay để được hỗ trợ.\n\n%s\n"},
+		"en": {"Your ReefCare account was deactivated",
+			"Hello,\n\nYour ReefCare account was deactivated at your request and every session was signed out. Personal data will be erased or anonymized after 30 days.\n\nIf you did not request this, reply to this email right away.\n\n%s\n"},
+	},
 }
 
 // email builds a message linking to a frontend path. A token is placed in the URL

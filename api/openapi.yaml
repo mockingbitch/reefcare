@@ -1,0 +1,844 @@
+openapi: 3.1.0
+info:
+  title: ReefCare API
+  version: 0.1.0
+  summary: Reef aquarium management API (Phase 1 — identity, profile, tanks).
+  description: |
+    Conventions are in docs/api-guidelines.md. In short:
+
+    - JSON only, `snake_case`, timestamps RFC 3339 UTC, dates `YYYY-MM-DD`.
+    - Decimal quantities are JSON **strings** (`"60"`, `"25.5"`) and are returned in canonical
+      form (no trailing zeros). Values are never rounded: too many decimals is a 422.
+    - `PATCH` bodies are merge patches over an explicit allowlist; `null` clears an optional
+      field; unknown fields → 400 `unknown_field`. Contested resources require `version`.
+    - Authentication is a session cookie (`__Host-rc_session`, or `rc_session` over plain http
+      in development). Every authenticated non-GET request must send `X-CSRF-Token` (returned
+      by login, also readable from the `__Host-rc_csrf` cookie). Every non-GET request whose
+      `Origin` is not allowed, or that a browser marks `Sec-Fetch-Site: cross-site`, gets
+      403 `csrf_failed`.
+    - Signed-in users have a general budget of 120 state-changing requests per minute.
+    - Resources the caller may not see return 404 `not_found`, never 403.
+
+    This document must match the implementation: `internal/app/openapi_test.go` fails when a
+    route exists in code but not here, or the reverse.
+servers:
+  - url: /
+tags:
+  - name: health
+  - name: auth
+  - name: profile
+  - name: tanks
+
+paths:
+  /healthz:
+    get:
+      tags: [health]
+      summary: Liveness
+      security: []
+      responses:
+        "200":
+          description: The process is up.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Status" }
+  /readyz:
+    get:
+      tags: [health]
+      summary: Readiness (database reachable, schema at least the embedded version)
+      security: []
+      responses:
+        "200":
+          description: Ready.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Readiness" }
+        "503":
+          description: A dependency is not ready; only the failing check's name is shown.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Readiness" }
+
+  /api/v1/auth/register:
+    post:
+      tags: [auth]
+      summary: Register (always 202, also for an already registered email)
+      description: |
+        Sends a verification link. To prevent enumeration the response is identical when the
+        email already has an account; its owner is emailed instead. Rate limited per IP and per
+        email.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegisterRequest" }
+      responses:
+        "202": { $ref: "#/components/responses/Accepted" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/auth/verify-email:
+    post:
+      tags: [auth]
+      summary: Verify an email address with the token from the link fragment
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TokenRequest" }
+      responses:
+        "200":
+          description: Verified.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Status" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422":
+          description: "`invalid_token`: unknown, expired, used, or sent to an address the account no longer has."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/auth/verify-email/resend:
+    post:
+      tags: [auth]
+      summary: Email a new verification link (3 per hour)
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      responses:
+        "202": { $ref: "#/components/responses/Accepted" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409":
+          description: "`already_verified`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/auth/login:
+    post:
+      tags: [auth]
+      summary: Sign in
+      description: |
+        Creates a session and sets the session and CSRF cookies. Unknown email and wrong
+        password give the same 401 `invalid_credentials`. A suspended account gets 403
+        `account_suspended` (only with the correct password). Signing in again revokes the
+        previous session of this browser.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200":
+          description: Signed in.
+          headers:
+            Set-Cookie: { $ref: "#/components/headers/SetSessionCookies" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LoginResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/Busy" }
+  /api/v1/auth/logout:
+    post:
+      tags: [auth]
+      summary: Sign out this session
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      responses:
+        "204": { description: Signed out; cookies cleared. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/auth/logout-all:
+    post:
+      tags: [auth]
+      summary: Sign out every session of the account, including this one (audited)
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      responses:
+        "204": { description: All sessions revoked; cookies cleared. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/auth/password-reset/request:
+    post:
+      tags: [auth]
+      summary: Request a password reset link (always 202)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        "202": { $ref: "#/components/responses/Accepted" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/auth/password-reset/confirm:
+    post:
+      tags: [auth]
+      summary: Set a new password with a reset token; revokes every session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [token, new_password]
+              properties:
+                token: { type: string }
+                new_password: { type: string, minLength: 10, maxLength: 128 }
+      responses:
+        "204": { description: Password changed; email marked verified; cookies cleared. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/v1/me:
+    get:
+      tags: [profile]
+      summary: The signed-in account, profile, preferences and roles
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    patch:
+      tags: [profile]
+      summary: Update the profile (merge patch, `version` required)
+      description: |
+        Changing the timezone never changes stored timestamps. In `unit_prefs` and
+        `notification_prefs` each key is merged; a `null` value removes that key, and `null`
+        for the whole object resets it.
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProfilePatch" }
+      responses:
+        "200":
+          description: Updated profile.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409":
+          description: "`version_conflict` or `username_taken`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+    delete:
+      tags: [profile]
+      summary: Delete the account (requires the password)
+      description: |
+        Deactivates the account immediately, signs out every session, revokes pending email
+        links and emails a confirmation. Personal data is erased or anonymized after 30 days
+        (docs/security.md §9). Tanks of the account disappear from their viewers at once.
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [password]
+              properties:
+                password: { type: string }
+      responses:
+        "202":
+          description: Deactivated; cookies cleared.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, erase_after]
+                properties:
+                  status: { const: deactivated }
+                  erase_after: { type: string, format: date-time }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422":
+          description: "`validation_failed` with field `password` code `incorrect`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/Busy" }
+  /api/v1/me/password:
+    post:
+      tags: [profile]
+      summary: Change password
+      description: Revokes other sessions, rotates this session (new cookies and CSRF token) and emails a notification.
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [current_password, new_password]
+              properties:
+                current_password: { type: string }
+                new_password: { type: string, minLength: 10, maxLength: 128 }
+      responses:
+        "200":
+          description: Changed.
+          headers:
+            Set-Cookie: { $ref: "#/components/headers/SetSessionCookies" }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [csrf_token]
+                properties:
+                  csrf_token: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/Busy" }
+
+  /api/v1/tanks:
+    get:
+      tags: [tanks]
+      summary: List the caller's tanks, newest first
+      parameters:
+        - name: include
+          in: query
+          description: Comma-separated. `shared` adds tanks shared with the caller; `archived` adds archived tanks.
+          schema: { type: string, example: "shared,archived" }
+        - { $ref: "#/components/parameters/Limit" }
+        - { $ref: "#/components/parameters/Cursor" }
+      responses:
+        "200":
+          description: A page of tanks.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Tank" } }
+                  next_cursor: { type: [string, "null"] }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [tanks]
+      summary: Create a private tank owned by the caller
+      description: Records `tank.created` on the tank timeline. At most 100 tanks per owner.
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TankCreate" }
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Location: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Tank" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409":
+          description: "`limit_reached`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/tanks/{tankID}:
+    parameters: [{ $ref: "#/components/parameters/TankID" }]
+    get:
+      tags: [tanks]
+      summary: Get a tank (owner or viewer)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Tank" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [tanks]
+      summary: Update a tank (owner, merge patch, `version` required)
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TankPatch" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Tank" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403":
+          description: "`forbidden` for viewers (they already know the tank exists); also `csrf_failed`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`version_conflict` or `tank_archived`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/tanks/{tankID}/archive:
+    parameters: [{ $ref: "#/components/parameters/TankID" }]
+    post:
+      tags: [tanks]
+      summary: Archive a tank (owner; terminal, idempotent)
+      description: Archived tanks stay readable but can no longer change. Records `tank.archived` on the timeline.
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      responses:
+        "200":
+          description: The archived tank.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Tank" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/tanks/{tankID}/shares:
+    parameters: [{ $ref: "#/components/parameters/TankID" }]
+    get:
+      tags: [tanks]
+      summary: List who can view the tank (owner)
+      responses:
+        "200":
+          description: At most 20 shares, never paginated.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Share" } }
+                  next_cursor: { type: "null" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [tanks]
+      summary: Share the tank read-only by email or username (owner, verified email)
+      description: |
+        Rate limited (30 per hour per owner) because the answer reveals whether an account
+        exists. The grantee's email is never returned. Audited as `tank.share.grant`.
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              description: Exactly one of `email` or `username`.
+              properties:
+                email: { type: string }
+                username: { type: string }
+      responses:
+        "201":
+          description: Shared.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Share" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403":
+          description: "`email_not_verified`, `forbidden` (viewer) or `csrf_failed`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`duplicate` or `limit_reached` (20 shares)."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "`validation_failed`: field codes `exactly_one_of`, `required`, `grantee_not_found`, `cannot_share_with_self`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/tanks/{tankID}/shares/{userID}:
+    parameters:
+      - { $ref: "#/components/parameters/TankID" }
+      - name: userID
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      tags: [tanks]
+      summary: Revoke a share (owner), or leave a shared tank (the viewer themselves)
+      description: Takes effect on the viewer's next request. Audited as `tank.share.revoke`.
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      responses:
+        "204": { description: Revoked. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+security:
+  - session: []
+
+components:
+  securitySchemes:
+    session:
+      type: apiKey
+      in: cookie
+      name: __Host-rc_session
+      description: Opaque session token (HttpOnly). Named `rc_session` when served over plain http in development.
+
+  parameters:
+    CSRF:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      description: The session's CSRF token (from login or the `__Host-rc_csrf` cookie).
+      schema: { type: string }
+    TankID:
+      name: tankID
+      in: path
+      required: true
+      description: A malformed ID is answered like an unknown one (404).
+      schema: { type: string, format: uuid }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+    Cursor:
+      name: cursor
+      in: query
+      description: Opaque `next_cursor` from the previous page.
+      schema: { type: string }
+
+  headers:
+    SetSessionCookies:
+      description: Session cookie (HttpOnly) and CSRF cookie (readable), `SameSite=Lax`, `Secure` and `__Host-` prefixed over https.
+      schema: { type: string }
+
+  responses:
+    Accepted:
+      description: Accepted.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Status" }
+    BadRequest:
+      description: "`malformed_json` (with the field when known), `unknown_field`, `invalid_query`."
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthenticated:
+      description: "`unauthenticated` or `invalid_credentials`."
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: "`csrf_failed`, `account_suspended`, `forbidden`, `email_not_verified`."
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: "`not_found`: the resource does not exist or the caller may not see it."
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unprocessable:
+      description: "`validation_failed` with per-field `details`, or a domain error such as `invalid_token`."
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    RateLimited:
+      description: "`rate_limited`"
+      headers:
+        Retry-After: { schema: { type: integer, minimum: 1 } }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Busy:
+      description: "`server_busy`: too many concurrent password hashes; retry shortly."
+      headers:
+        Retry-After: { schema: { type: integer, minimum: 1 } }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Decimal:
+      type: string
+      pattern: '^-?[0-9]+(\.[0-9]+)?$'
+      description: Exact decimal as a string. Responses are canonical (no trailing zeros).
+      examples: ["60", "25.5"]
+    Status:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string }
+    Readiness:
+      type: object
+      required: [status, checks]
+      properties:
+        status: { enum: [ok, unavailable] }
+        checks:
+          type: object
+          additionalProperties: { enum: [ok, fail] }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string, description: Stable machine-readable code; clients localize by it. }
+            message: { type: string, description: English fallback text. }
+            details:
+              type: array
+              items:
+                type: object
+                required: [code]
+                properties:
+                  field: { type: string, examples: ["dimensions_cm.width"] }
+                  code: { type: string }
+                  params: { type: object, additionalProperties: { type: string } }
+            request_id: { type: string }
+    RegisterRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password, display_name]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 10, maxLength: 128 }
+        display_name: { type: string, minLength: 1, maxLength: 60 }
+        locale: { enum: [vi, en], default: vi }
+        timezone: { type: string, default: Asia/Ho_Chi_Minh, description: IANA time zone name }
+    TokenRequest:
+      type: object
+      additionalProperties: false
+      required: [token]
+      properties:
+        token: { type: string }
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: { type: string }
+        password: { type: string }
+    LoginResponse:
+      type: object
+      required: [user, csrf_token]
+      properties:
+        user: { $ref: "#/components/schemas/User" }
+        csrf_token: { type: string }
+    UnitPrefs:
+      type: object
+      additionalProperties: false
+      description: Display units only; stored measurements keep their original value and unit.
+      properties:
+        volume: { enum: [L, gal_us] }
+        length: { enum: [cm, in] }
+        temperature: { enum: [C, F] }
+        alkalinity: { enum: [dKH, meq/L, ppm] }
+        salinity: { enum: [SG, ppt] }
+    NotificationPrefs:
+      type: object
+      additionalProperties: false
+      description: Opt-in email channels. Security emails cannot be turned off.
+      properties:
+        email_reminders: { type: boolean }
+        email_assessments: { type: boolean }
+        email_digest: { type: boolean }
+    User:
+      type: object
+      required: [id, email, email_verified, display_name, username, bio, experience_level, locale, timezone,
+                 unit_prefs, notification_prefs, roles, created_at, version]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        email_verified: { type: boolean }
+        display_name: { type: string }
+        username: { type: [string, "null"] }
+        bio: { type: [string, "null"] }
+        experience_level: { enum: [beginner, intermediate, advanced, professional, null] }
+        locale: { enum: [vi, en] }
+        timezone: { type: string }
+        unit_prefs: { $ref: "#/components/schemas/UnitPrefs" }
+        notification_prefs: { $ref: "#/components/schemas/NotificationPrefs" }
+        roles: { type: array, items: { enum: [moderator, administrator] } }
+        created_at: { type: string, format: date-time }
+        version: { type: integer }
+    ProfilePatch:
+      type: object
+      additionalProperties: false
+      required: [version]
+      properties:
+        version: { type: integer }
+        display_name: { type: string, minLength: 1, maxLength: 60 }
+        username: { type: [string, "null"], pattern: '^[a-z0-9_]{3,30}$', description: Lower-cased before validation. }
+        bio: { type: [string, "null"], maxLength: 1000 }
+        experience_level: { enum: [beginner, intermediate, advanced, professional, null] }
+        locale: { enum: [vi, en] }
+        timezone: { type: string }
+        unit_prefs:
+          type: [object, "null"]
+          additionalProperties: false
+          properties:
+            volume: { enum: [L, gal_us, null] }
+            length: { enum: [cm, in, null] }
+            temperature: { enum: [C, F, null] }
+            alkalinity: { enum: [dKH, meq/L, ppm, null] }
+            salinity: { enum: [SG, ppt, null] }
+        notification_prefs:
+          type: [object, "null"]
+          additionalProperties: false
+          properties:
+            email_reminders: { type: [boolean, "null"] }
+            email_assessments: { type: [boolean, "null"] }
+            email_digest: { type: [boolean, "null"] }
+    TankType:
+      enum: [fish_only, fowlr, mixed_reef, sps_dominant, lps_dominant, soft_coral, custom]
+    Dimensions:
+      type: object
+      additionalProperties: false
+      required: [length, width, height]
+      description: Inside dimensions in cm; each > 0, at most 6 integer digits and 1 decimal.
+      properties:
+        length: { $ref: "#/components/schemas/Decimal" }
+        width: { $ref: "#/components/schemas/Decimal" }
+        height: { $ref: "#/components/schemas/Decimal" }
+    Tank:
+      type: object
+      required: [id, owner_id, access, name, description, tank_type, status, dimensions_cm, display_volume_l,
+                 sump_volume_l, system_volume_l, setup_date, water_source, salt_mix, archived_at, created_at,
+                 updated_at, version]
+      properties:
+        id: { type: string, format: uuid }
+        owner_id: { type: string, format: uuid }
+        access: { enum: [owner, viewer], description: The caller's access to this tank. }
+        name: { type: string }
+        description: { type: [string, "null"] }
+        tank_type: { $ref: "#/components/schemas/TankType" }
+        status: { enum: [cycling, active, paused, archived] }
+        dimensions_cm:
+          oneOf:
+            - { $ref: "#/components/schemas/Dimensions" }
+            - { type: "null" }
+        display_volume_l: { $ref: "#/components/schemas/Decimal" }
+        sump_volume_l:
+          oneOf:
+            - { $ref: "#/components/schemas/Decimal" }
+            - { type: "null" }
+        system_volume_l:
+          allOf: [{ $ref: "#/components/schemas/Decimal" }]
+          description: Estimated total water volume, entered by the keeper. Calculations use it and label it as an estimate.
+        setup_date: { type: [string, "null"], format: date }
+        water_source: { type: [string, "null"] }
+        salt_mix: { type: [string, "null"] }
+        archived_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        version: { type: integer }
+    TankCreate:
+      type: object
+      additionalProperties: false
+      required: [name, tank_type, display_volume_l, system_volume_l]
+      description: |
+        Volumes are > 0 (sump ≥ 0) with at most 7 integer digits and 2 decimals. A system volume
+        smaller than the display volume is accepted (rock displacement); clients should warn.
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        description: { type: [string, "null"], maxLength: 4000 }
+        tank_type: { $ref: "#/components/schemas/TankType" }
+        status: { enum: [cycling, active, paused], default: cycling }
+        dimensions_cm:
+          oneOf:
+            - { $ref: "#/components/schemas/Dimensions" }
+            - { type: "null" }
+        display_volume_l: { $ref: "#/components/schemas/Decimal" }
+        sump_volume_l:
+          oneOf:
+            - { $ref: "#/components/schemas/Decimal" }
+            - { type: "null" }
+        system_volume_l: { $ref: "#/components/schemas/Decimal" }
+        setup_date: { type: [string, "null"], format: date, description: "1950-01-01 to tomorrow (UTC)" }
+        water_source: { type: [string, "null"], maxLength: 100 }
+        salt_mix: { type: [string, "null"], maxLength: 100 }
+    TankPatch:
+      type: object
+      additionalProperties: false
+      required: [version]
+      description: |
+        Merge patch. `null` clears optional fields; required fields reject `null`. Status
+        `archived` is only reachable via the archive action. `dimensions_cm` is replaced as a
+        whole (all three members required), not merged member by member. A stale `version`
+        gets 409 before any validation.
+      properties:
+        version: { type: integer }
+        name: { type: string, minLength: 1, maxLength: 80 }
+        description: { type: [string, "null"], maxLength: 4000 }
+        tank_type: { $ref: "#/components/schemas/TankType" }
+        status: { enum: [cycling, active, paused] }
+        dimensions_cm:
+          oneOf:
+            - { $ref: "#/components/schemas/Dimensions" }
+            - { type: "null" }
+        display_volume_l: { $ref: "#/components/schemas/Decimal" }
+        sump_volume_l:
+          oneOf:
+            - { $ref: "#/components/schemas/Decimal" }
+            - { type: "null" }
+        system_volume_l: { $ref: "#/components/schemas/Decimal" }
+        setup_date: { type: [string, "null"], format: date }
+        water_source: { type: [string, "null"], maxLength: 100 }
+        salt_mix: { type: [string, "null"], maxLength: 100 }
+    Share:
+      type: object
+      required: [user_id, display_name, username, permission, created_at]
+      properties:
+        user_id: { type: string, format: uuid }
+        display_name: { type: string }
+        username: { type: [string, "null"] }
+        permission: { const: viewer }
+        created_at: { type: string, format: date-time }

@@ -44,3 +44,19 @@ sql:
               pointer: true
           - db_type: jsonb
             go_type: encoding/json.RawMessage
+          - db_type: date
+            go_type: time.Time
+          - db_type: date
+            nullable: true
+            go_type:
+              import: time
+              type: Time
+              pointer: true
+          - db_type: pg_catalog.numeric
+            go_type: reefcare/internal/platform/decimal.Decimal
+          - db_type: pg_catalog.numeric
+            nullable: true
+            go_type:
+              import: reefcare/internal/platform/decimal
+              type: Decimal
+              pointer: true

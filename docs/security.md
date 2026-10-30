@@ -110,7 +110,10 @@ Status: **Draft for review** (Phase 0)
 ## 9. Privacy and account deletion
 
 - Tanks private by default; sharing explicit; public case snapshots show only selected categories.
-- Deletion request → account `deactivated`, sessions revoked, profile hidden immediately.
+- Deletion request (`DELETE /api/v1/me`, password required) → account `deactivated`, every
+  session and pending email link revoked, confirmation email sent, audited
+  (`account.deactivated`), profile hidden and the account's tanks hidden from their viewers
+  immediately. The email address stays reserved until erasure (open item S5).
 - Within 30 days a job: deletes private tank data and media; anonymizes authored public content
   ("Deleted user") unless the user chose deletion of their posts; keeps `reputation_ledger` and
   `audit_logs` rows with the user id unlinked from personal data, to preserve integrity of others'

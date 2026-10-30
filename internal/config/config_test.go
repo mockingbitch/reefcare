@@ -66,6 +66,20 @@ func TestLoadValidation(t *testing.T) {
 		wantErr string
 	}{
 		{
+			name:    "malformed metrics address",
+			env:     map[string]string{"DATABASE_URL": "postgres://localhost/db", "METRICS_ADDR": "9090"},
+			wantErr: "METRICS_ADDR must be host:port",
+		},
+		{
+			name:    "metrics on the public listener",
+			env:     map[string]string{"DATABASE_URL": "postgres://localhost/db", "METRICS_ADDR": ":8080"},
+			wantErr: "METRICS_ADDR must differ",
+		},
+		{
+			name: "metrics on a separate port",
+			env:  map[string]string{"DATABASE_URL": "postgres://localhost/db", "METRICS_ADDR": "127.0.0.1:9090"},
+		},
+		{
 			name:    "non-postgres database url",
 			env:     map[string]string{"DATABASE_URL": "mysql://localhost/db"},
 			wantErr: "DATABASE_URL",

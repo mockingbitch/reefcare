@@ -142,6 +142,11 @@ CREATE TABLE auth_tokens (                     -- email verification, password r
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 
+-- Implemented in db/migrations/00004_tanks.sql with these differences: `filtration` and
+-- `visibility` are deferred until the equipment module (2.6) and public case snapshots
+-- (Phase 4) need them; `archived_at` (CHECK: set iff status = 'archived'), a CHECK that
+-- dimensions are all set or all null, text length limits, and `tank_shares.granted_by`
+-- were added. `auth_tokens.email` (00003) binds a token to the address it was sent to.
 CREATE TABLE tanks (
   id                    uuid PRIMARY KEY DEFAULT uuidv7(),
   owner_id              uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
