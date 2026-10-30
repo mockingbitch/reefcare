@@ -26,8 +26,17 @@
 		alkalinity: m.unit_alkalinity,
 		salinity: m.unit_salinity
 	};
+	// In-app reminders per category default to on; email channels are opt-in (API NotificationPrefs).
+	const reminderKeys = [
+		'reminders_dosing',
+		'reminders_water_change',
+		'reminders_maintenance'
+	] as const;
 	const notifyKeys = ['email_reminders', 'email_assessments', 'email_digest'] as const;
 	const notifyLabels: Record<string, () => string> = {
+		reminders_dosing: m.notify_inapp_dosing,
+		reminders_water_change: m.notify_inapp_water_change,
+		reminders_maintenance: m.notify_inapp_maintenance,
 		email_reminders: m.notify_reminders,
 		email_assessments: m.notify_assessments,
 		email_digest: m.notify_digest
@@ -40,8 +49,15 @@
 	let experience = $state(u.experience_level ?? '');
 	let locale = $state(u.locale);
 	let timezone = $state(u.timezone);
-	let units = $state<Record<string, string>>({ ...(u.unit_prefs as Record<string, string>) });
+	// Every key starts as '' (the "default" option): binding undefined into SelectField, whose
+	// value has a fallback, throws (svelte props_invalid_value) for accounts without unit prefs.
+	let units = $state<Record<string, string>>(
+		Object.fromEntries(
+			Object.keys(unitChoices).map((k) => [k, (u.unit_prefs as Record<string, string>)[k] ?? ''])
+		)
+	);
 	let notify = $state<Record<string, boolean>>({
+		...Object.fromEntries(reminderKeys.map((k) => [k, true])),
 		...(u.notification_prefs as Record<string, boolean>)
 	});
 	let busy = $state(false);
@@ -80,7 +96,7 @@
 		const unitPatch: Record<string, string | null> = {};
 		for (const k of Object.keys(unitChoices)) unitPatch[k] = units[k] || null;
 		const notifyPatch: Record<string, boolean> = {};
-		for (const k of notifyKeys) notifyPatch[k] = !!notify[k];
+		for (const k of [...reminderKeys, ...notifyKeys]) notifyPatch[k] = !!notify[k];
 		const r = await api<User>('PATCH', '/me', {
 			version: session.user.version,
 			display_name: displayName,
@@ -179,6 +195,13 @@
 
 	<fieldset>
 		<legend>{m.notifications_title()}</legend>
+		<p class="hint">{m.notify_inapp_title()}</p>
+		{#each reminderKeys as key (key)}
+			<label class="check"
+				><input type="checkbox" bind:checked={notify[key]} /> {notifyLabels[key]()}</label
+			>
+		{/each}
+		<p class="hint">{m.notify_email_title()}</p>
 		{#each notifyKeys as key (key)}
 			<label class="check"
 				><input type="checkbox" bind:checked={notify[key]} /> {notifyLabels[key]()}</label

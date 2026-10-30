@@ -9,7 +9,9 @@
 	import { errorMessage } from '#lib/errors.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { getLocale, setLocale, locales } from '#lib/paraglide/runtime.js';
+	import { unreadBadge } from '#lib/notifications.js';
 	import { session } from '#lib/session.svelte.js';
+	import { unread } from '#lib/unread.svelte.js';
 	import type { LayoutProps } from './$types';
 
 	let { children }: LayoutProps = $props();
@@ -47,6 +49,7 @@
 			return;
 		}
 		session.clear();
+		unread.clear();
 		await goto(resolve('/(auth)/login'));
 	}
 
@@ -57,6 +60,13 @@
 	}
 
 	const current = (path: string) => (page.url.pathname.startsWith(path) ? 'page' : undefined);
+
+	// Keep the unread count fresh on every navigation while signed in.
+	$effect(() => {
+		void page.url.pathname;
+		if (session.user) unread.refresh();
+		else unread.clear();
+	});
 </script>
 
 <svelte:head>
@@ -75,6 +85,19 @@
 					<li>
 						<a href={resolve('/(app)/tanks')} aria-current={current(resolve('/(app)/tanks'))}
 							>{m.nav_tanks()}</a
+						>
+					</li>
+					<li>
+						<a
+							href={resolve('/(app)/notifications')}
+							aria-current={current(resolve('/(app)/notifications'))}
+							>{m.nav_notifications()}{#if unread.count > 0}
+								<span class="badge"
+									><span aria-hidden="true">{unreadBadge(unread.count, unread.capped)}</span><span
+										class="visually-hidden"
+										>{m.nav_unread({ count: unreadBadge(unread.count, unread.capped) })}</span
+									></span
+								>{/if}</a
 						>
 					</li>
 					<li>

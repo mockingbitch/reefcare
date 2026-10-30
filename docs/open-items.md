@@ -2,8 +2,8 @@
 
 Last updated: 2026-10-31 · State: Phase 1 done; Phase 2 backend done except 2.1/2.2 (waiting
 on D5): 2.3–2.9 committed on branch `phase-1-foundation`. 2.10 web in progress: water-change
-(2dc0b29), dosing (321ab17), equipment & maintenance (ed1d76d) and livestock screens done;
-notifications and the tank dashboard remain.
+(2dc0b29), dosing (321ab17), equipment & maintenance (ed1d76d), livestock (bea468b) and
+notification screens done; the tank dashboard remains.
 
 Everything below is known to be **not done**, **partially done**, or **waiting on a decision**.
 Sources: the design docs, the db-architect / go-reviewer / security-auditor reviews, and
@@ -44,6 +44,7 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 | F9 | Serve the web build in production | P2 | `web/build` is a static SPA (`200.html` fallback); Caddy must serve it and proxy `/api`, `/healthz`, `/readyz` on the same origin, and add the response headers (part of L4). Until then the app can be framed: `frame-ancestors 'none'` cannot go in a meta CSP (web security review L1). Add a CI check that asserts the headers on the served `200.html` |
 | F11 | Sign-out does not reach other open tabs | P3 | Other tabs show the user until their next API call returns 401 (web security review L4). Use a `BroadcastChannel` signal |
 | F10 | Dev-only npm advisories | P3 | `npm audit` reports 4 low-severity issues in `deepmerge` via `@sveltejs/vite-plugin-svelte` (build tooling only); `npm audit --omit=dev` is clean and runs in CI. Wait for the upstream fix |
+| F12 | SvelteKit's route announcer sets an inline style the CSP blocks | P3 | Console error on navigation (`style-src 'self'`); harmless for users, but noisy. Allow its hash in `kit.csp` or hide the announcer with a class |
 
 ## 3. Background jobs (milestone 2.3 done)
 
@@ -121,7 +122,8 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 | NT2 | Upcoming-dose reminders | P3 | Not built: one per dose would be noisy; consider a daily "today's doses" summary |
 | NT3 | Daily digest email (`email_digest`) and assessment email (`email_assessments`) | P3 | Keys reserved; only `email_reminders` is delivered |
 | NT4 | Email provider for production | P1 | Decision D6; dev uses Mailpit. Add List-Unsubscribe and a one-click opt-out link |
-| NT5 | Web notification centre and settings | P2 | Milestone 2.10 |
+| NT5 | ~~Web notification centre and settings~~ | done | `/notifications` (unread filter, open → tank section and mark read, mark all read, pagination), unread count in the navigation ("99+" when capped), per-category in-app reminder switches on the profile page. Unknown kinds render generically. e2e covers the page and preferences only: reminders come from the 15-minute scan (NT10) |
+| NT10 | No end-to-end test with a real reminder | P3 | Needs a way to run the reminder scan on demand in e2e (test-only job trigger) or seeded notifications; rendering per kind is unit-tested |
 | NT6 | Reminders for viewers of shared tanks | P3 | Owner only today |
 | NT7 | Scan cost | P3 | Each scan re-emits the whole window (≤ 7 days) and inserts row by row (ON CONFLICT no-op); batch with `unnest` or anti-join on dedupe keys if scan time grows |
 | NT8 | First deploy sends one backlog email | P3 | `email_reminders` was settable before delivery existed; the first scan emails up to 7 days of overdue items once (counts only). Accepted: no production users yet |
