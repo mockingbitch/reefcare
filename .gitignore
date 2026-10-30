@@ -23,3 +23,6 @@ web/build/
 .DS_Store
 .idea/
 .vscode/
+
+# graphify: per-machine cache and session state (the graph itself is committed)
+graphify-out/cache/
