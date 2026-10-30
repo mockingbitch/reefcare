@@ -23,6 +23,14 @@ export type DosingPlanPatch = Schemas['DosingPlanPatch'];
 export type DoseEvent = Schemas['DoseEvent'];
 export type DoseUnit = Schemas['DoseUnit'];
 export type DosingForm = Schemas['DosingForm'];
+export type Equipment = Schemas['Equipment'];
+export type EquipmentCreate = Schemas['EquipmentCreate'];
+export type EquipmentPatch = Schemas['EquipmentPatch'];
+export type EquipmentConfiguration = Schemas['EquipmentConfiguration'];
+export type MaintenancePlan = Schemas['MaintenancePlan'];
+export type MaintenancePlanCreate = Schemas['MaintenancePlanCreate'];
+export type MaintenancePlanPatch = Schemas['MaintenancePlanPatch'];
+export type MaintenanceEvent = Schemas['MaintenanceEvent'];
 export type Page<T> = { items: T[]; next_cursor: string | null };
 
 export type ErrorDetail = { field?: string; code: string; params?: Record<string, string> };

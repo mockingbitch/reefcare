@@ -8,7 +8,8 @@
 
 	type Props = Omit<HTMLInputAttributes, 'value'> & {
 		label: string;
-		value?: string;
+		/** A number when bound to `type="number"`: Svelte binds numeric inputs as numbers. */
+		value?: string | number;
 		error?: string;
 		hint?: string;
 		optional?: boolean;

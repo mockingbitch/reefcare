@@ -32,6 +32,8 @@ test('schedule, record and complete water changes', async ({ page }) => {
 	// New schedule: the preview lists the next three dates computed by the API.
 	await page.getByRole('link', { name: t.wc_schedule_new }).click();
 	await page.getByLabel(t.wc_planned_volume_label).fill('10,5');
+	// Number inputs bind numbers: editing the interval must still build a valid rule.
+	await page.getByLabel(t.rec_interval_weeks).fill('2');
 	const preview = page.getByRole('heading', { name: t.rec_preview_title }).locator('..');
 	await expect(preview.getByRole('listitem')).toHaveCount(3);
 	await expectAccessible(page);
@@ -40,6 +42,7 @@ test('schedule, record and complete water changes', async ({ page }) => {
 	await expect(page.getByRole('heading', { name: t.wc_title, level: 1 })).toBeVisible();
 	const schedules = page.getByRole('region', { name: t.wc_schedules_title });
 	await expect(schedules.getByText(/10,5 L/)).toBeVisible();
+	await expect(schedules.getByText(/Cứ 2 tuần/)).toBeVisible();
 	const upcoming = page.getByRole('region', { name: t.wc_upcoming_title });
 	await expect(upcoming.getByRole('button', { name: t.wc_complete }).first()).toBeVisible();
 

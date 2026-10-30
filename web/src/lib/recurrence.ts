@@ -12,9 +12,10 @@ export const maxMonthDay = 28;
 
 export type RecurrenceForm = {
 	freq: Freq;
-	interval: string;
+	// `<input type="number">` binds numbers; values may be either and are stringified here.
+	interval: string | number;
 	days: Weekday[];
-	monthDay: string;
+	monthDay: string | number;
 	/** Wall-clock time "HH:MM" in the schedule's time zone. */
 	time: string;
 };
@@ -50,12 +51,12 @@ export function monthDayCapped(startsOn: string): boolean {
 /** Builds the RRULE in the API's canonical part order. Invalid input is passed through so the API reports it. */
 export function toRRule(f: RecurrenceForm): string {
 	const parts = [`FREQ=${f.freq}`];
-	const interval = f.interval.trim();
+	const interval = String(f.interval ?? '').trim();
 	if (interval !== '' && interval !== '1') parts.push(`INTERVAL=${interval}`);
 	if (f.freq === 'WEEKLY' && f.days.length > 0) {
 		parts.push(`BYDAY=${weekdays.filter((d) => f.days.includes(d)).join(',')}`);
 	}
-	if (f.freq === 'MONTHLY') parts.push(`BYMONTHDAY=${f.monthDay.trim()}`);
+	if (f.freq === 'MONTHLY') parts.push(`BYMONTHDAY=${String(f.monthDay ?? '').trim()}`);
 	const [h, min] = splitTime(f.time);
 	parts.push(`BYHOUR=${h}`, `BYMINUTE=${min}`);
 	return parts.join(';');
@@ -124,7 +125,7 @@ export function describeRRule(rrule: string): string {
 		}
 		case 'MONTHLY':
 			return n === 1
-				? m.rec_monthly({ day: f.monthDay, time })
-				: m.rec_every_n_months({ n: String(n), day: f.monthDay, time });
+				? m.rec_monthly({ day: String(f.monthDay), time })
+				: m.rec_every_n_months({ n: String(n), day: String(f.monthDay), time });
 	}
 }

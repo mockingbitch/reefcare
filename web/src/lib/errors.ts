@@ -46,6 +46,8 @@ export function errorMessage(e: ApiError): string {
 			return m.err_schedule_ended();
 		case 'plan_completed':
 			return m.err_plan_completed();
+		case 'equipment_removed':
+			return m.err_equipment_removed();
 		case 'idempotency_key_reused':
 			return m.err_idempotency_key_reused();
 		case 'already_verified':
@@ -137,6 +139,27 @@ export function fieldMessage(d: ErrorDetail): string {
 			return m.f_before_scheduled();
 		case 'not_allowed':
 			return m.f_not_allowed();
+		case 'equipment_not_found':
+			return m.f_equipment_not_found();
+		case 'equipment_removed':
+			return m.err_equipment_removed();
+		case 'before_purchase':
+			return m.f_before_purchase();
+		case 'before_installed':
+			return m.f_before_installed();
+		case 'before_current':
+			return m.f_before_current();
+		case 'after_removed':
+			return m.f_after_removed();
+		case 'invalid_key':
+			return m.f_invalid_key();
+		case 'invalid_value':
+			return m.f_invalid_value();
+		case 'keys_count':
+			return m.f_keys_count({ max: p.max ?? '50' });
+		case 'must_be_object':
+		case 'too_large':
+			return m.f_settings_invalid();
 		default:
 			return m.f_invalid();
 	}

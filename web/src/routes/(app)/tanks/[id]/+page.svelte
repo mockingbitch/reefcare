@@ -149,6 +149,14 @@
 			<li>
 				<a href={resolve('/(app)/tanks/[id]/dosing', { id: tank.id })}>{m.tank_section_dosing()}</a>
 			</li>
+			<li>
+				<a href={resolve('/(app)/tanks/[id]/equipment', { id: tank.id })}>{m.eq_title()}</a>
+			</li>
+			<li>
+				<a href={resolve('/(app)/tanks/[id]/maintenance', { id: tank.id })}
+					>{m.tank_section_maintenance()}</a
+				>
+			</li>
 		</ul>
 	</nav>
 

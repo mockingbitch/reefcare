@@ -74,3 +74,10 @@ describe('describeRRule', () => {
 		);
 	});
 });
+
+describe('number inputs', () => {
+	it('accepts the numbers that type="number" inputs bind', () => {
+		const f = { ...weekly, freq: 'MONTHLY' as const, interval: 2, monthDay: 15 };
+		expect(toRRule(f)).toBe('FREQ=MONTHLY;INTERVAL=2;BYMONTHDAY=15;BYHOUR=9;BYMINUTE=0');
+	});
+});

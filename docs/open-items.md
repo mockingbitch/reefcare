@@ -2,8 +2,8 @@
 
 Last updated: 2026-10-31 · State: Phase 1 done; Phase 2 backend done except 2.1/2.2 (waiting
 on D5): 2.3–2.9 committed on branch `phase-1-foundation`. 2.10 web in progress: water-change
-screens committed (2dc0b29); dosing screens done; equipment, livestock, notifications and the
-tank dashboard remain.
+(2dc0b29) and dosing (321ab17) screens committed; equipment & maintenance screens done;
+livestock, notifications and the tank dashboard remain.
 
 Everything below is known to be **not done**, **partially done**, or **waiting on a decision**.
 Sources: the design docs, the db-architect / go-reviewer / security-auditor reviews, and
@@ -94,7 +94,8 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 |---|---|---|---|
 | EQ1 | Shared equipment model catalog (`equipment_models`, specs) | P3 | Manufacturer/model are free text on each device today |
 | EQ2 | Consumables on maintenance events (filter socks, carbon, media) | P3 | Not stored yet |
-| EQ4 | Web screens for equipment, configurations and maintenance | P2 | Milestone 2.10 |
+| EQ4 | ~~Web screens for equipment, configurations and maintenance~~ | done | `web/src/routes/(app)/tanks/[id]/equipment/` (list with removed devices, add/edit, remove, free-form settings editor with typed values, configuration history with per-version change summary) and `.../maintenance/` (due now, plans with deactivate/reactivate, history, mark done and unplanned records with `Idempotency-Key`). e2e `web/e2e/equipment.e2e.ts` with axe |
+| EQ7 | Settings are free-form per device | P3 | No per-category templates (e.g. light channels, pump % ) yet; consider suggested keys per category once real usage shows common ones |
 | EQ5 | Correcting a mistaken maintenance event, configuration version or `installed_at` | P3 | All are fixed today; a correction must be audited (timeline correction event), never a silent rewrite |
 | EQ6 | Filtered maintenance history uses the `(col IS NULL OR col = $x)` pattern | P3 | Under a generic plan a filtered page may scan the tank's events (bounded per tank); split into per-filter queries if it shows up in query stats |
 
