@@ -1,7 +1,7 @@
 # ReefCare — Open Items
 
-Last updated: 2026-10-30 · State: Phase 1 done (milestones 1.1–1.8). Changes since c9f6c47 are
-not committed yet.
+Last updated: 2026-10-30 · State: Phase 1 done; Phase 2 backend done except 2.1/2.2 (waiting
+on D5): 2.3–2.9 committed on branch `phase-1-foundation` (latest 25400b1). Next: 2.10 web.
 
 Everything below is known to be **not done**, **partially done**, or **waiting on a decision**.
 Sources: the design docs, the db-architect / go-reviewer / security-auditor reviews, and
@@ -10,7 +10,7 @@ verification runs. Remove an item only when it is done and verified; link the co
 Priority: **P1** blocks launch or the next milestone · **P2** needed before production ·
 **P3** improvement / later phase.
 
-## Done on 2026-10-30 (uncommitted)
+## Done on 2026-10-30 (committed)
 
 F1 profile (`PATCH`/`DELETE /me`) · F2 tanks, shares, `tanks.Authorizer`, timeline recorder,
 cross-user 404 suite · F3 CI workflow + Renovate · F5 `api/openapi.yaml` with a route-sync test ·
@@ -59,7 +59,6 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 | # | Item | Priority | Notes |
 |---|---|---|---|
 | W1 | Measured salinity/temperature and pre/post water-test links on water changes | P2 | Need the parameter catalog and units (2.1/2.2, decision D5) |
-| W2 | Water-change reminders (in-app/email) | P2 | Milestone 2.9; overdue is already derivable |
 | W3 | Web screens for schedules and water changes | P2 | Milestone 2.10 (API and generated types are ready) |
 | W4 | `Idempotency-Key` header for retried creates (`POST /tanks/{id}/water-changes`) | P3 | Complete/skip are naturally idempotent; a retried POST of a one-off change can create a duplicate. Reuse the per-row pattern from dosing ad-hoc doses (idempotency_key + request_hash) |
 | W5 | Dilution projection after n changes (docs/domain-model.md, with its caveats) | P3 | Needs measured new-water values (2.2), exact decimal powers, a batch/continuous `method` field, and D5 review |
@@ -88,7 +87,6 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 |---|---|---|---|
 | EQ1 | Shared equipment model catalog (`equipment_models`, specs) | P3 | Manufacturer/model are free text on each device today |
 | EQ2 | Consumables on maintenance events (filter socks, carbon, media) | P3 | Not stored yet |
-| EQ3 | Maintenance reminders | P2 | With notifications (2.9); overdue is already derived |
 | EQ4 | Web screens for equipment, configurations and maintenance | P2 | Milestone 2.10 |
 | EQ5 | Correcting a mistaken maintenance event, configuration version or `installed_at` | P3 | All are fixed today; a correction must be audited (timeline correction event), never a silent rewrite |
 | EQ6 | Filtered maintenance history uses the `(col IS NULL OR col = $x)` pattern | P3 | Under a generic plan a filtered page may scan the tank's events (bounded per tank); split into per-filter queries if it shows up in query stats |
@@ -149,7 +147,7 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 
 | # | Item | Priority | Why it is open | Next step |
 |---|---|---|---|---|
-| R1 | Work since c9f6c47 is uncommitted; only `master` exists, no remote | P1 | No commit has been requested | Commit on a branch; create the remote (R4) |
+| R1 | All work is on local branch `phase-1-foundation`; no remote, nothing merged to `master` | P1 | No remote repository yet | Create the remote (R4), push, open a PR to `master` |
 | R4 | Go module path is `reefcare`; no remote repository | P3 | — | Rename to `github.com/<org>/reefcare` once it exists |
 
 ## 7. Open product and infrastructure decisions
