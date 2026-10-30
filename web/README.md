@@ -29,6 +29,18 @@ at :4001 because `compose.yaml` sets `PUBLIC_BASE_URL=http://localhost:4001`.
 E2E needs `docker compose up -d db mailpit`. Ports follow the 4000 range in `compose.yaml`;
 override with `E2E_API_PORT`, `E2E_WEB_PORT`, `E2E_DATABASE_URL`, `MAILPIT_URL`, `MAILPIT_SMTP_PORT`.
 
+Without Go installed, run the API in Docker and point the tests at it with `E2E_API_URL` (the
+API needs `PUBLIC_BASE_URL=http://localhost:4011` so email links reach the test web server):
+
+```sh
+docker compose build api && make migrate-up
+docker run -d --name reefcare-e2e-api --network reefcare_default -p 127.0.0.1:4010:4010 \
+  -e HTTP_ADDR=:4010 -e PUBLIC_BASE_URL=http://localhost:4011 \
+  -e DATABASE_URL='postgres://reefcare:reefcare@db:5432/reefcare?sslmode=disable' \
+  -e SMTP_HOST=mailpit -e SMTP_PORT=1025 reefcare-api:latest serve
+E2E_API_URL=http://localhost:4010 npm run test:e2e
+```
+
 E2E accounts use unique `@e2e.reefcare.test` addresses, so runs can share the dev database.
 
 ## Layout

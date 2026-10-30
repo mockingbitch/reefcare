@@ -34,6 +34,7 @@ tags:
   - name: maintenance
   - name: livestock
   - name: notifications
+  - name: scheduling
 
 paths:
   /healthz:
@@ -1792,6 +1793,36 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/recurrence/preview:
+    get:
+      tags: [scheduling]
+      summary: Preview the next occurrences of a schedule before saving it
+      description: |
+        Applies exactly the rules used when a water-change schedule or dosing plan is saved,
+        so clients can show "next: Sun 1 Nov, Sun 8 Nov, …" without reimplementing them.
+        Stores nothing. Field errors are the same as on schedule creation (`invalid_rrule`,
+        `unsupported_rrule_part`, `invalid_timezone`, `invalid_date`, `out_of_range`,
+        `before_start`).
+      parameters:
+        - { name: rrule, in: query, required: true, schema: { $ref: "#/components/schemas/RRule" } }
+        - { name: timezone, in: query, required: true, description: IANA time zone of the wall-clock times, schema: { type: string } }
+        - { name: starts_on, in: query, required: true, schema: { type: string, format: date } }
+        - { name: ends_on, in: query, description: Inclusive; not before starts_on., schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: Canonical rule and up to 3 occurrences at or after now (empty when the window has passed).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rrule, next_occurrences]
+                properties:
+                  rrule: { $ref: "#/components/schemas/RRule" }
+                  next_occurrences: { type: array, maxItems: 3, items: { type: string, format: date-time } }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
 
 security:
   - session: []

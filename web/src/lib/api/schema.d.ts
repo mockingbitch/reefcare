@@ -3600,6 +3600,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/recurrence/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview the next occurrences of a schedule before saving it
+         * @description Applies exactly the rules used when a water-change schedule or dosing plan is saved,
+         *     so clients can show "next: Sun 1 Nov, Sun 8 Nov, …" without reimplementing them.
+         *     Stores nothing. Field errors are the same as on schedule creation (`invalid_rrule`,
+         *     `unsupported_rrule_part`, `invalid_timezone`, `invalid_date`, `out_of_range`,
+         *     `before_start`).
+         */
+        get: {
+            parameters: {
+                query: {
+                    rrule: components["schemas"]["RRule"];
+                    /** @description IANA time zone of the wall-clock times */
+                    timezone: string;
+                    starts_on: string;
+                    /** @description Inclusive; not before starts_on. */
+                    ends_on?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Canonical rule and up to 3 occurrences at or after now (empty when the window has passed). */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            rrule: components["schemas"]["RRule"];
+                            next_occurrences: string[];
+                        };
+                    };
+                };
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                422: components["responses"]["Unprocessable"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {

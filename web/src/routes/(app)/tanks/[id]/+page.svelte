@@ -139,6 +139,16 @@
 		{/if}
 	</section>
 
+	<nav class="card" aria-label={m.tank_sections()}>
+		<ul class="sections">
+			<li>
+				<a href={resolve('/(app)/tanks/[id]/water-changes', { id: tank.id })}
+					>{m.tank_section_water_changes()}</a
+				>
+			</li>
+		</ul>
+	</nav>
+
 	<div class="actions">
 		{#if tank.access === 'owner'}
 			{#if tank.status !== 'archived'}
@@ -195,5 +205,13 @@
 	h3 {
 		font-size: 1rem;
 		margin: 1rem 0 0.25rem;
+	}
+	.sections {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem 1.25rem;
 	}
 </style>

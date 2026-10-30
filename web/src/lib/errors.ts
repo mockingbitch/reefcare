@@ -40,6 +40,10 @@ export function errorMessage(e: ApiError): string {
 			return m.err_duplicate();
 		case 'invalid_token':
 			return m.err_invalid_token();
+		case 'already_resolved':
+			return m.err_already_resolved();
+		case 'schedule_ended':
+			return m.err_schedule_ended();
 		case 'already_verified':
 			return m.err_already_verified();
 		case 'validation_failed':
@@ -105,6 +109,14 @@ export function fieldMessage(d: ErrorDetail): string {
 			return m.f_exactly_one_of();
 		case 'unsupported_unit':
 			return m.f_unsupported_unit();
+		case 'invalid_rrule':
+			return m.f_invalid_rrule();
+		case 'unsupported_rrule_part':
+			return m.f_unsupported_rrule_part();
+		case 'before_start':
+			return m.f_before_start();
+		case 'in_future':
+			return m.f_in_future();
 		default:
 			return m.f_invalid();
 	}

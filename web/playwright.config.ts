@@ -9,6 +9,10 @@ const smtpPort = process.env.MAILPIT_SMTP_PORT ?? '4004';
 const databaseURL =
 	process.env.E2E_DATABASE_URL ??
 	'postgres://reefcare:reefcare@localhost:4002/reefcare?sslmode=disable';
+// Set E2E_API_URL to test against an API that is already running (e.g. in Docker on a
+// machine without Go). It must use PUBLIC_BASE_URL=http://localhost:<webPort> and Mailpit
+// so email links work. Otherwise the API is started with `go run`.
+const externalAPI = process.env.E2E_API_URL;
 
 export default defineConfig({
 	testDir: 'e2e',
@@ -23,30 +27,34 @@ export default defineConfig({
 		trace: 'retain-on-failure'
 	},
 	webServer: [
-		{
-			command: 'go run ./cmd/api migrate up && go run ./cmd/api serve',
-			cwd: '..',
-			port: apiPort,
-			reuseExistingServer: false,
-			timeout: 180_000,
-			env: {
-				APP_ENV: 'development',
-				HTTP_ADDR: `:${apiPort}`,
-				DATABASE_URL: databaseURL,
-				PUBLIC_BASE_URL: `http://localhost:${webPort}`,
-				SMTP_HOST: 'localhost',
-				SMTP_PORT: smtpPort,
-				MAIL_FROM: 'ReefCare <no-reply@reefcare.local>',
-				LOG_FORMAT: 'text',
-				LOG_LEVEL: 'warn'
-			}
-		},
+		...(externalAPI ? [] : [apiServer()]),
 		{
 			command: 'npm run build && npm run preview -- --port ' + webPort + ' --strictPort',
 			port: webPort,
 			reuseExistingServer: !process.env.CI,
 			timeout: 180_000,
-			env: { API_URL: `http://localhost:${apiPort}` }
+			env: { API_URL: externalAPI ?? `http://localhost:${apiPort}` }
 		}
 	]
 });
+
+function apiServer() {
+	return {
+		command: 'go run ./cmd/api migrate up && go run ./cmd/api serve',
+		cwd: '..',
+		port: apiPort,
+		reuseExistingServer: false,
+		timeout: 180_000,
+		env: {
+			APP_ENV: 'development',
+			HTTP_ADDR: `:${apiPort}`,
+			DATABASE_URL: databaseURL,
+			PUBLIC_BASE_URL: `http://localhost:${webPort}`,
+			SMTP_HOST: 'localhost',
+			SMTP_PORT: smtpPort,
+			MAIL_FROM: 'ReefCare <no-reply@reefcare.local>',
+			LOG_FORMAT: 'text',
+			LOG_LEVEL: 'warn'
+		}
+	};
+}

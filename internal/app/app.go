@@ -29,6 +29,7 @@ import (
 	"reefcare/internal/platform/logging"
 	"reefcare/internal/platform/mail"
 	"reefcare/internal/platform/metrics"
+	"reefcare/internal/scheduling"
 	"reefcare/internal/tanks"
 	"reefcare/internal/waterchanges"
 )
@@ -168,6 +169,7 @@ func New(d Deps) App {
 	notifySvc.AddSource(equipment.Reminders)
 	notifySvc.RegisterJobs(runner)
 	notifyHTTP := notifications.NewHandler(notifySvc, idHTTP.RequireAuth, d.Log)
+	schedHTTP := scheduling.NewHandler(d.Clock, idHTTP.RequireAuth, d.Log)
 
 	var observe func(http.Handler) http.Handler
 	if d.Metrics != nil {
@@ -187,6 +189,7 @@ func New(d Deps) App {
 			eqHTTP.Mount(api)
 			lsHTTP.Mount(api)
 			notifyHTTP.Mount(api)
+			schedHTTP.Mount(api)
 		},
 	})
 	return App{Handler: handler, Jobs: runner}

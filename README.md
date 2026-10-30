@@ -85,6 +85,7 @@ reported at once. See `internal/config/config.go` and [docs/architecture.md](doc
 | `/api/v1/auth/*` | registration, email verification, login/logout, logout of all sessions, password reset |
 | `/api/v1/me` | profile and preferences (`GET`/`PATCH`), password change, account deletion (`DELETE`) |
 | `/api/v1/tanks` | tank CRUD/archive and read-only sharing |
+| `/api/v1/recurrence/preview` | next dates of a schedule before saving it (same rules as the server) |
 
 The full contract is [api/openapi.yaml](api/openapi.yaml) (OpenAPI 3.1); a unit test fails when
 it and the router disagree. Conventions are in [docs/api-guidelines.md](docs/api-guidelines.md).

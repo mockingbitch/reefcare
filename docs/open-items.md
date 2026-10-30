@@ -1,7 +1,9 @@
 # ReefCare — Open Items
 
 Last updated: 2026-10-30 · State: Phase 1 done; Phase 2 backend done except 2.1/2.2 (waiting
-on D5): 2.3–2.9 committed on branch `phase-1-foundation` (latest 25400b1). Next: 2.10 web.
+on D5): 2.3–2.9 committed on branch `phase-1-foundation` (latest 25400b1). 2.10 web in progress:
+water-change screens done (uncommitted); dosing, equipment, livestock, notifications and the
+tank dashboard remain.
 
 Everything below is known to be **not done**, **partially done**, or **waiting on a decision**.
 Sources: the design docs, the db-architect / go-reviewer / security-auditor reviews, and
@@ -59,10 +61,12 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 | # | Item | Priority | Notes |
 |---|---|---|---|
 | W1 | Measured salinity/temperature and pre/post water-test links on water changes | P2 | Need the parameter catalog and units (2.1/2.2, decision D5) |
-| W3 | Web screens for schedules and water changes | P2 | Milestone 2.10 (API and generated types are ready) |
+| W3 | ~~Web screens for schedules and water changes~~ | done | `web/src/routes/(app)/tanks/[id]/water-changes/`: overdue / upcoming / schedules / history, complete and skip dialogs, schedule create/edit with pause/resume/end, one-off record/plan; e2e `web/e2e/water-changes.e2e.ts` with axe. Schedule previews use the new `GET /api/v1/recurrence/preview` (`internal/scheduling`), which applies the server's own recurrence rules |
 | W4 | `Idempotency-Key` header for retried creates (`POST /tanks/{id}/water-changes`) | P3 | Complete/skip are naturally idempotent; a retried POST of a one-off change can create a duplicate. Reuse the per-row pattern from dosing ad-hoc doses (idempotency_key + request_hash) |
 | W5 | Dilution projection after n changes (docs/domain-model.md, with its caveats) | P3 | Needs measured new-water values (2.2), exact decimal powers, a batch/continuous `method` field, and D5 review |
-| W6 | UI requirements from the domain review (for 2.10) | P2 | Show "monthly on the 28th" when a start on the 29th–31st is capped; show the next 3 dates before saving a schedule; use `next_occurrences` (not materialized rows) for "next change" when the interval exceeds 35 days; "< 0.1 %" for tiny fractions; overdue wording calm ("complete or skip when you can"); prompt (optional) to record new-water salinity and temperature on completion |
+| W6 | Remaining UI requirement from the domain review | P2 | Done in 2.10: capped month day note, next 3 dates before saving (server preview), schedule cards use `next_occurrences`, "< 0.1 %", calm overdue wording. **Open:** optional prompt to record new-water salinity and temperature on completion (needs 2.2 / W1) |
+| W10 | Schedules with several times a day or several month days can't be edited in the form | P3 | The form edits one time and one month day; such rules (created through the API) show read-only with a note, and volume/notes/status stay editable |
+| W11 | "Upcoming" shows the 5 soonest of the newest 50 scheduled changes | P3 | The list endpoint is newest-first; with more than 50 materialized occurrences (e.g. several daily schedules) the soonest could be missed. Add `order=asc` or a `to` window if that happens |
 | W7 | "Skip all overdue" with one reason | P3 | Several missed weekly changes otherwise need one skip each |
 | W8 | Ordinal weekdays (`BYDAY=1SA`, "first Saturday") and "last day of month" | P3 | Rejected today with `invalid_rrule`; common enough to add with `BYSETPOS` |
 | W9 | Gallon input | P3 | Volumes are litres only. If gallons are accepted, store the original value and unit and convert explicitly (US 3.785411784 L, Imperial 4.54609 L — never guess which) |
@@ -147,7 +151,9 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 
 | # | Item | Priority | Why it is open | Next step |
 |---|---|---|---|---|
-| R1 | All work is on local branch `phase-1-foundation`; no remote, nothing merged to `master` | P1 | No remote repository yet | Create the remote (R4), push, open a PR to `master` |
+| R1 | Work is on branch `phase-1-foundation`; nothing merged to `master` | P1 | The remote exists (GitHub) and the branch is pushed, but no PR is open | Open a PR to `master`; check that CI ran (F8) |
+| R7 | `.claude/settings.json` hooks call `/home/feng/.local/bin/graphify`, an absolute path from one machine | P2 | On other machines (e.g. macOS) the hook command does not exist; the hooks fail on every Bash/Grep/Read/Glob call (non-blocking, but noisy and not doing their job) | Install graphify on every dev machine and call it via `PATH` or `$CLAUDE_PROJECT_DIR`, or move these hooks to each developer's `.claude/settings.local.json` |
+| R8 | E2E without local Go | P3 | `web/playwright.config.ts` now accepts `E2E_API_URL` to use an API that is already running (e.g. in Docker) instead of `go run` | Documented in web/README.md |
 | R4 | Go module path is `reefcare`; no remote repository | P3 | — | Rename to `github.com/<org>/reefcare` once it exists |
 
 ## 7. Open product and infrastructure decisions

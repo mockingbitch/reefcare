@@ -9,6 +9,13 @@ export type TankCreate = Schemas['TankCreate'];
 export type TankPatch = Schemas['TankPatch'];
 export type ProfilePatch = Schemas['ProfilePatch'];
 export type Share = Schemas['Share'];
+export type WaterChange = Schemas['WaterChange'];
+export type WaterChangeSchedule = Schemas['WaterChangeSchedule'];
+export type WaterChangeScheduleCreate = Schemas['WaterChangeScheduleCreate'];
+export type WaterChangeSchedulePatch = Schemas['WaterChangeSchedulePatch'];
+export type WaterChangeRecord = Schemas['WaterChangeRecord'];
+export type WaterChangeEstimate = Schemas['WaterChangeEstimate'];
+export type RecurrencePreview = { rrule: string; next_occurrences: string[] };
 export type Page<T> = { items: T[]; next_cursor: string | null };
 
 export type ErrorDetail = { field?: string; code: string; params?: Record<string, string> };
