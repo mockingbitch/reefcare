@@ -1983,7 +1983,12 @@ export interface paths {
                 header: {
                     /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
                     "X-CSRF-Token": components["parameters"]["CSRF"];
-                    "Idempotency-Key"?: string;
+                    /**
+                     * @description Makes a create safe to retry: a retry returns the first result (header
+                     *     `Idempotent-Replayed: true`); the same key with a different request is 422
+                     *     `idempotency_key_reused`.
+                     */
+                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 };
                 path: {
                     /** @description A malformed ID is answered like an unknown one (404). */
@@ -2120,6 +2125,732 @@ export interface paths {
                 403: components["responses"]["Forbidden"];
                 404: components["responses"]["NotFound"];
                 /** @description `already_resolved` or `tank_archived` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                422: components["responses"]["Unprocessable"];
+                429: components["responses"]["RateLimited"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tanks/{tankID}/equipment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                tankID: components["parameters"]["TankID"];
+            };
+            cookie?: never;
+        };
+        /** The tank's devices, newest installation first (owner or viewer) */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description `removed` adds removed devices. */
+                    include?: "removed";
+                };
+                header?: never;
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    tankID: components["parameters"]["TankID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description All devices (never paginated; at most 200 per tank). */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: components["schemas"]["Equipment"][];
+                            next_cursor: null;
+                        };
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        /** Add a device (owner); records `equipment.installed` on the timeline */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    tankID: components["parameters"]["TankID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["EquipmentCreate"];
+                };
+            };
+            responses: {
+                /** @description Added. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Equipment"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `tank_archived` or `limit_reached` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                422: components["responses"]["Unprocessable"];
+                429: components["responses"]["RateLimited"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/{equipmentID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                equipmentID: components["parameters"]["EquipmentID"];
+            };
+            cookie?: never;
+        };
+        /** A device with its current configuration (owner or viewer) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    equipmentID: components["parameters"]["EquipmentID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Equipment"];
+                    };
+                };
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit a device that is still installed (owner, merge patch, `version` required)
+         * @description `installed_at` is fixed at creation (the timeline is placed against it).
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    equipmentID: components["parameters"]["EquipmentID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["EquipmentPatch"];
+                };
+            };
+            responses: {
+                /** @description Updated. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Equipment"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `version_conflict`, `equipment_removed` or `tank_archived` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                422: components["responses"]["Unprocessable"];
+                429: components["responses"]["RateLimited"];
+            };
+        };
+        trace?: never;
+    };
+    "/api/v1/equipment/{equipmentID}/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                equipmentID: components["parameters"]["EquipmentID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark a device removed (owner; idempotent)
+         * @description The device stays in history; its maintenance plans stop being due. Records `equipment.removed`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    equipmentID: components["parameters"]["EquipmentID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /**
+                         * Format: date-time
+                         * @description Default now; not before installed_at.
+                         */
+                        removed_at?: string;
+                        reason?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Removed. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Equipment"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `tank_archived` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                422: components["responses"]["Unprocessable"];
+                429: components["responses"]["RateLimited"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/{equipmentID}/configurations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                equipmentID: components["parameters"]["EquipmentID"];
+            };
+            cookie?: never;
+        };
+        /** Every configuration version, newest first (owner or viewer) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    equipmentID: components["parameters"]["EquipmentID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description All versions (never paginated). */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: components["schemas"]["EquipmentConfiguration"][];
+                            next_cursor: null;
+                        };
+                    };
+                };
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        /**
+         * Record a new configuration version (owner)
+         * @description Versions are immutable; earlier ones stay visible. Records `equipment.configuration_changed` at `effective_at`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    equipmentID: components["parameters"]["EquipmentID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        settings: components["schemas"]["EquipmentSettings"];
+                        /**
+                         * Format: date-time
+                         * @description Default now; not in the future, not before installed_at (`before_installed`) and
+                         *     not before the current version's effective_at (`before_current`), so the latest
+                         *     version is always the current one.
+                         */
+                        effective_at?: string;
+                        note?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Recorded. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EquipmentConfiguration"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `equipment_removed` or `tank_archived` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                422: components["responses"]["Unprocessable"];
+                429: components["responses"]["RateLimited"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tanks/{tankID}/maintenance-plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                tankID: components["parameters"]["TankID"];
+            };
+            cookie?: never;
+        };
+        /** Maintenance plans, active and soonest due first (owner or viewer) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    tankID: components["parameters"]["TankID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description All plans (never paginated; at most 100 per tank). */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: components["schemas"]["MaintenancePlan"][];
+                            next_cursor: null;
+                        };
+                    };
+                };
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        /** Create a maintenance plan (owner); first due on `starts_on` */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    tankID: components["parameters"]["TankID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MaintenancePlanCreate"];
+                };
+            };
+            responses: {
+                /** @description Created. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MaintenancePlan"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `tank_archived` or `limit_reached` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                422: components["responses"]["Unprocessable"];
+                429: components["responses"]["RateLimited"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/maintenance-plans/{planID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                planID: components["parameters"]["MaintenancePlanID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit a plan (owner, merge patch, `version` required); the due date is recomputed */
+        patch: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    planID: components["parameters"]["MaintenancePlanID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MaintenancePlanPatch"];
+                };
+            };
+            responses: {
+                /** @description Updated. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MaintenancePlan"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `version_conflict` or `tank_archived` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                422: components["responses"]["Unprocessable"];
+                429: components["responses"]["RateLimited"];
+            };
+        };
+        trace?: never;
+    };
+    "/api/v1/maintenance-plans/{planID}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                planID: components["parameters"]["MaintenancePlanID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record that a plan's task was done (owner; idempotent with Idempotency-Key)
+         * @description The plan becomes due `interval_days` after the latest performance (local date in the
+         *     plan's zone); recording an older one late never moves it back. An inactive plan may still
+         *     be recorded. Records `maintenance.performed`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                    /**
+                     * @description Makes a create safe to retry: a retry returns the first result (header
+                     *     `Idempotent-Replayed: true`); the same key with a different request is 422
+                     *     `idempotency_key_reused`.
+                     */
+                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                };
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    planID: components["parameters"]["MaintenancePlanID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /**
+                         * Format: date-time
+                         * @description Default now; not in the future.
+                         */
+                        performed_at?: string;
+                        notes?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Recorded. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MaintenanceEvent"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `tank_archived` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                422: components["responses"]["Unprocessable"];
+                429: components["responses"]["RateLimited"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tanks/{tankID}/maintenance-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                tankID: components["parameters"]["TankID"];
+            };
+            cookie?: never;
+        };
+        /** Maintenance done, newest first (owner or viewer) */
+        get: {
+            parameters: {
+                query?: {
+                    plan_id?: string;
+                    equipment_id?: string;
+                    limit?: components["parameters"]["Limit"];
+                    /** @description Opaque `next_cursor` from the previous page. */
+                    cursor?: components["parameters"]["Cursor"];
+                };
+                header?: never;
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    tankID: components["parameters"]["TankID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A page of maintenance events. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: components["schemas"]["MaintenanceEvent"][];
+                            next_cursor: string | null;
+                        };
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        /**
+         * Record maintenance done without a plan (owner; idempotent with Idempotency-Key)
+         * @description With `equipment_id`, `performed_at` must fall within the device's lifetime
+         *     (`before_installed`, `after_removed`); past work on a removed device may be recorded.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                    /**
+                     * @description Makes a create safe to retry: a retry returns the first result (header
+                     *     `Idempotent-Replayed: true`); the same key with a different request is 422
+                     *     `idempotency_key_reused`.
+                     */
+                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                };
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    tankID: components["parameters"]["TankID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        title: string;
+                        /** Format: uuid */
+                        equipment_id?: string | null;
+                        /** Format: date-time */
+                        performed_at?: string;
+                        notes?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Recorded. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MaintenanceEvent"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `tank_archived` */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -2638,6 +3369,158 @@ export interface components {
             updated_at: string;
             version: number;
         };
+        /** @enum {unknown} */
+        EquipmentCategory: "lighting" | "return_pump" | "flow_pump" | "skimmer" | "heater" | "chiller" | "dosing_pump" | "ato" | "reactor" | "uv" | "controller" | "filter" | "sensor" | "other";
+        /** @description Flat free-form settings (light schedule, pump speed…). Keys 1–50 characters; values strings (≤ 200), numbers or booleans. Never interpreted by ReefCare. */
+        EquipmentSettings: {
+            [key: string]: string | number | boolean;
+        };
+        EquipmentConfiguration: {
+            /** Format: uuid */
+            id: string;
+            version_no: number;
+            settings: components["schemas"]["EquipmentSettings"];
+            /** Format: date-time */
+            effective_at: string;
+            note: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        Equipment: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tank_id: string;
+            category: components["schemas"]["EquipmentCategory"];
+            name: string;
+            manufacturer: string | null;
+            model: string | null;
+            serial_number: string | null;
+            /** Format: date */
+            purchased_on: string | null;
+            /** Format: date */
+            warranty_until: string | null;
+            /** Format: date-time */
+            installed_at: string;
+            /** Format: date-time */
+            removed_at: string | null;
+            removal_reason: string | null;
+            notes: string | null;
+            /** @description The current (latest) configuration version, if any. */
+            configuration: components["schemas"]["EquipmentConfiguration"] | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            version: number;
+        };
+        EquipmentCreate: {
+            category: components["schemas"]["EquipmentCategory"];
+            name: string;
+            manufacturer?: string | null;
+            model?: string | null;
+            serial_number?: string | null;
+            /** Format: date */
+            purchased_on?: string | null;
+            /**
+             * Format: date
+             * @description Not before purchased_on (`before_purchase`).
+             */
+            warranty_until?: string | null;
+            /**
+             * Format: date-time
+             * @description Default now; not in the future.
+             */
+            installed_at?: string;
+            notes?: string | null;
+        };
+        EquipmentPatch: {
+            version: number;
+            category?: components["schemas"]["EquipmentCategory"];
+            name?: string;
+            manufacturer?: string | null;
+            model?: string | null;
+            serial_number?: string | null;
+            /** Format: date */
+            purchased_on?: string | null;
+            /** Format: date */
+            warranty_until?: string | null;
+            notes?: string | null;
+        };
+        MaintenancePlan: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tank_id: string;
+            /** Format: uuid */
+            equipment_id: string | null;
+            equipment_name: string | null;
+            title: string;
+            interval_days: number;
+            timezone: string;
+            /** Format: date */
+            starts_on: string;
+            /** Format: date-time */
+            last_performed_at: string | null;
+            /**
+             * Format: date
+             * @description Local date: last performance + interval_days, or starts_on.
+             */
+            next_due_on: string;
+            /** @description False after archiving the tank */
+            active: boolean;
+            /** @description Derived: active and next_due_on has passed in `timezone`. */
+            overdue: boolean;
+            due_today: boolean;
+            notes: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            version: number;
+        };
+        MaintenancePlanCreate: {
+            title: string;
+            interval_days: number;
+            timezone: string;
+            /** Format: date */
+            starts_on: string;
+            /**
+             * Format: uuid
+             * @description A device on the same tank that is still installed (`equipment_not_found`, `equipment_removed`).
+             */
+            equipment_id?: string | null;
+            notes?: string | null;
+        };
+        MaintenancePlanPatch: {
+            version: number;
+            title?: string;
+            interval_days?: number;
+            timezone?: string;
+            /** Format: date */
+            starts_on?: string;
+            /** Format: uuid */
+            equipment_id?: string | null;
+            /** @description An active plan needs an installed device (`equipment_removed`). */
+            active?: boolean;
+            notes?: string | null;
+        };
+        MaintenanceEvent: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tank_id: string;
+            /** Format: uuid */
+            plan_id: string | null;
+            /** Format: uuid */
+            equipment_id: string | null;
+            title: string;
+            /** Format: date-time */
+            performed_at: string;
+            notes: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
     };
     responses: {
         /** @description Accepted. */
@@ -2720,6 +3603,16 @@ export interface components {
         CSRF: string;
         /** @description A malformed ID is answered like an unknown one (404). */
         TankID: string;
+        /**
+         * @description Makes a create safe to retry: a retry returns the first result (header
+         *     `Idempotent-Replayed: true`); the same key with a different request is 422
+         *     `idempotency_key_reused`.
+         */
+        IdempotencyKey: string;
+        /** @description A malformed ID is answered like an unknown one (404). */
+        EquipmentID: string;
+        /** @description A malformed ID is answered like an unknown one (404). */
+        MaintenancePlanID: string;
         /** @description A malformed ID is answered like an unknown one (404). */
         DosingPlanID: string;
         /** @description A malformed ID is answered like an unknown one (404). */

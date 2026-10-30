@@ -30,6 +30,8 @@ tags:
   - name: tanks
   - name: water-changes
   - name: dosing
+  - name: equipment
+  - name: maintenance
 
 paths:
   /healthz:
@@ -981,9 +983,7 @@ paths:
         `idempotency_key_reused`. Adds `dosing.completed` to the timeline.
       parameters:
         - { $ref: "#/components/parameters/CSRF" }
-        - name: Idempotency-Key
-          in: header
-          schema: { type: string, minLength: 8, maxLength: 128 }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
       requestBody:
         required: true
         content:
@@ -1075,6 +1075,368 @@ paths:
         "422": { $ref: "#/components/responses/Unprocessable" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
+  /api/v1/tanks/{tankID}/equipment:
+    parameters: [{ $ref: "#/components/parameters/TankID" }]
+    get:
+      tags: [equipment]
+      summary: The tank's devices, newest installation first (owner or viewer)
+      parameters:
+        - name: include
+          in: query
+          description: "`removed` adds removed devices."
+          schema: { enum: [removed] }
+      responses:
+        "200":
+          description: All devices (never paginated; at most 200 per tank).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Equipment" } }
+                  next_cursor: { type: "null" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [equipment]
+      summary: Add a device (owner); records `equipment.installed` on the timeline
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EquipmentCreate" }
+      responses:
+        "201":
+          description: Added.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Equipment" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`tank_archived` or `limit_reached`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/equipment/{equipmentID}:
+    parameters: [{ $ref: "#/components/parameters/EquipmentID" }]
+    get:
+      tags: [equipment]
+      summary: A device with its current configuration (owner or viewer)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Equipment" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [equipment]
+      summary: Edit a device that is still installed (owner, merge patch, `version` required)
+      description: "`installed_at` is fixed at creation (the timeline is placed against it)."
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EquipmentPatch" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Equipment" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`version_conflict`, `equipment_removed` or `tank_archived`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/equipment/{equipmentID}/remove:
+    parameters: [{ $ref: "#/components/parameters/EquipmentID" }]
+    post:
+      tags: [equipment]
+      summary: Mark a device removed (owner; idempotent)
+      description: The device stays in history; its maintenance plans stop being due. Records `equipment.removed`.
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                removed_at: { type: string, format: date-time, description: Default now; not before installed_at. }
+                reason: { type: [string, "null"], maxLength: 500 }
+      responses:
+        "200":
+          description: Removed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Equipment" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`tank_archived`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/equipment/{equipmentID}/configurations:
+    parameters: [{ $ref: "#/components/parameters/EquipmentID" }]
+    get:
+      tags: [equipment]
+      summary: Every configuration version, newest first (owner or viewer)
+      responses:
+        "200":
+          description: All versions (never paginated).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/EquipmentConfiguration" } }
+                  next_cursor: { type: "null" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [equipment]
+      summary: Record a new configuration version (owner)
+      description: Versions are immutable; earlier ones stay visible. Records `equipment.configuration_changed` at `effective_at`.
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [settings]
+              properties:
+                settings: { $ref: "#/components/schemas/EquipmentSettings" }
+                effective_at:
+                  type: string
+                  format: date-time
+                  description: |
+                    Default now; not in the future, not before installed_at (`before_installed`) and
+                    not before the current version's effective_at (`before_current`), so the latest
+                    version is always the current one.
+                note: { type: [string, "null"], maxLength: 500 }
+      responses:
+        "201":
+          description: Recorded.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EquipmentConfiguration" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`equipment_removed` or `tank_archived`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/tanks/{tankID}/maintenance-plans:
+    parameters: [{ $ref: "#/components/parameters/TankID" }]
+    get:
+      tags: [maintenance]
+      summary: Maintenance plans, active and soonest due first (owner or viewer)
+      responses:
+        "200":
+          description: All plans (never paginated; at most 100 per tank).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/MaintenancePlan" } }
+                  next_cursor: { type: "null" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [maintenance]
+      summary: Create a maintenance plan (owner); first due on `starts_on`
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MaintenancePlanCreate" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MaintenancePlan" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`tank_archived` or `limit_reached`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/maintenance-plans/{planID}:
+    parameters: [{ $ref: "#/components/parameters/MaintenancePlanID" }]
+    patch:
+      tags: [maintenance]
+      summary: Edit a plan (owner, merge patch, `version` required); the due date is recomputed
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MaintenancePlanPatch" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MaintenancePlan" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`version_conflict` or `tank_archived`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/maintenance-plans/{planID}/events:
+    parameters: [{ $ref: "#/components/parameters/MaintenancePlanID" }]
+    post:
+      tags: [maintenance]
+      summary: Record that a plan's task was done (owner; idempotent with Idempotency-Key)
+      description: |
+        The plan becomes due `interval_days` after the latest performance (local date in the
+        plan's zone); recording an older one late never moves it back. An inactive plan may still
+        be recorded. Records `maintenance.performed`.
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                performed_at: { type: string, format: date-time, description: Default now; not in the future. }
+                notes: { type: [string, "null"], maxLength: 2000 }
+      responses:
+        "201":
+          description: Recorded.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MaintenanceEvent" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`tank_archived`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/tanks/{tankID}/maintenance-events:
+    parameters: [{ $ref: "#/components/parameters/TankID" }]
+    get:
+      tags: [maintenance]
+      summary: Maintenance done, newest first (owner or viewer)
+      parameters:
+        - { name: plan_id, in: query, schema: { type: string, format: uuid } }
+        - { name: equipment_id, in: query, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/Limit" }
+        - { $ref: "#/components/parameters/Cursor" }
+      responses:
+        "200":
+          description: A page of maintenance events.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/MaintenanceEvent" } }
+                  next_cursor: { type: [string, "null"] }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [maintenance]
+      summary: Record maintenance done without a plan (owner; idempotent with Idempotency-Key)
+      description: |
+        With `equipment_id`, `performed_at` must fall within the device's lifetime
+        (`before_installed`, `after_removed`); past work on a removed device may be recorded.
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [title]
+              properties:
+                title: { type: string, minLength: 1, maxLength: 100 }
+                equipment_id: { type: [string, "null"], format: uuid }
+                performed_at: { type: string, format: date-time }
+                notes: { type: [string, "null"], maxLength: 2000 }
+      responses:
+        "201":
+          description: Recorded.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MaintenanceEvent" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`tank_archived`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
 security:
   - session: []
 
@@ -1095,6 +1457,26 @@ components:
       schema: { type: string }
     TankID:
       name: tankID
+      in: path
+      required: true
+      description: A malformed ID is answered like an unknown one (404).
+      schema: { type: string, format: uuid }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      description: |
+        Makes a create safe to retry: a retry returns the first result (header
+        `Idempotent-Replayed: true`); the same key with a different request is 422
+        `idempotency_key_reused`.
+      schema: { type: string, minLength: 8, maxLength: 128 }
+    EquipmentID:
+      name: equipmentID
+      in: path
+      required: true
+      description: A malformed ID is answered like an unknown one (404).
+      schema: { type: string, format: uuid }
+    MaintenancePlanID:
+      name: planID
       in: path
       required: true
       description: A malformed ID is answered like an unknown one (404).
@@ -1641,3 +2023,134 @@ components:
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
         version: { type: integer }
+    EquipmentCategory:
+      enum: [lighting, return_pump, flow_pump, skimmer, heater, chiller, dosing_pump, ato, reactor, uv, controller, filter, sensor, other]
+    EquipmentSettings:
+      type: object
+      minProperties: 1
+      maxProperties: 50
+      description: Flat free-form settings (light schedule, pump speed…). Keys 1–50 characters; values strings (≤ 200), numbers or booleans. Never interpreted by ReefCare.
+      additionalProperties:
+        oneOf: [{ type: string, maxLength: 200 }, { type: number }, { type: boolean }]
+    EquipmentConfiguration:
+      type: object
+      required: [id, version_no, settings, effective_at, note, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        version_no: { type: integer, minimum: 1 }
+        settings: { $ref: "#/components/schemas/EquipmentSettings" }
+        effective_at: { type: string, format: date-time }
+        note: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+    Equipment:
+      type: object
+      required: [id, tank_id, category, name, manufacturer, model, serial_number, purchased_on, warranty_until,
+                 installed_at, removed_at, removal_reason, notes, configuration, created_at, updated_at, version]
+      properties:
+        id: { type: string, format: uuid }
+        tank_id: { type: string, format: uuid }
+        category: { $ref: "#/components/schemas/EquipmentCategory" }
+        name: { type: string }
+        manufacturer: { type: [string, "null"] }
+        model: { type: [string, "null"] }
+        serial_number: { type: [string, "null"] }
+        purchased_on: { type: [string, "null"], format: date }
+        warranty_until: { type: [string, "null"], format: date }
+        installed_at: { type: string, format: date-time }
+        removed_at: { type: [string, "null"], format: date-time }
+        removal_reason: { type: [string, "null"] }
+        notes: { type: [string, "null"] }
+        configuration:
+          description: The current (latest) configuration version, if any.
+          oneOf:
+            - { $ref: "#/components/schemas/EquipmentConfiguration" }
+            - { type: "null" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        version: { type: integer }
+    EquipmentCreate:
+      type: object
+      additionalProperties: false
+      required: [category, name]
+      properties:
+        category: { $ref: "#/components/schemas/EquipmentCategory" }
+        name: { type: string, minLength: 1, maxLength: 100 }
+        manufacturer: { type: [string, "null"], maxLength: 100 }
+        model: { type: [string, "null"], maxLength: 100 }
+        serial_number: { type: [string, "null"], maxLength: 100 }
+        purchased_on: { type: [string, "null"], format: date }
+        warranty_until: { type: [string, "null"], format: date, description: Not before purchased_on (`before_purchase`). }
+        installed_at: { type: string, format: date-time, description: Default now; not in the future. }
+        notes: { type: [string, "null"], maxLength: 2000 }
+    EquipmentPatch:
+      type: object
+      additionalProperties: false
+      required: [version]
+      properties:
+        version: { type: integer }
+        category: { $ref: "#/components/schemas/EquipmentCategory" }
+        name: { type: string, minLength: 1, maxLength: 100 }
+        manufacturer: { type: [string, "null"], maxLength: 100 }
+        model: { type: [string, "null"], maxLength: 100 }
+        serial_number: { type: [string, "null"], maxLength: 100 }
+        purchased_on: { type: [string, "null"], format: date }
+        warranty_until: { type: [string, "null"], format: date }
+        notes: { type: [string, "null"], maxLength: 2000 }
+    MaintenancePlan:
+      type: object
+      required: [id, tank_id, equipment_id, equipment_name, title, interval_days, timezone, starts_on, last_performed_at,
+                 next_due_on, active, overdue, due_today, notes, created_at, updated_at, version]
+      properties:
+        id: { type: string, format: uuid }
+        tank_id: { type: string, format: uuid }
+        equipment_id: { type: [string, "null"], format: uuid }
+        equipment_name: { type: [string, "null"] }
+        title: { type: string }
+        interval_days: { type: integer, minimum: 1, maximum: 730 }
+        timezone: { type: string }
+        starts_on: { type: string, format: date }
+        last_performed_at: { type: [string, "null"], format: date-time }
+        next_due_on: { type: string, format: date, description: "Local date: last performance + interval_days, or starts_on." }
+        active: { type: boolean, description: False after archiving the tank, removing the device or deactivating the plan. }
+        overdue: { type: boolean, description: "Derived: active and next_due_on has passed in `timezone`." }
+        due_today: { type: boolean }
+        notes: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        version: { type: integer }
+    MaintenancePlanCreate:
+      type: object
+      additionalProperties: false
+      required: [title, interval_days, timezone, starts_on]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 100 }
+        interval_days: { type: integer, minimum: 1, maximum: 730 }
+        timezone: { type: string }
+        starts_on: { type: string, format: date }
+        equipment_id: { type: [string, "null"], format: uuid, description: "A device on the same tank that is still installed (`equipment_not_found`, `equipment_removed`)." }
+        notes: { type: [string, "null"], maxLength: 2000 }
+    MaintenancePlanPatch:
+      type: object
+      additionalProperties: false
+      required: [version]
+      properties:
+        version: { type: integer }
+        title: { type: string, minLength: 1, maxLength: 100 }
+        interval_days: { type: integer, minimum: 1, maximum: 730 }
+        timezone: { type: string }
+        starts_on: { type: string, format: date }
+        equipment_id: { type: [string, "null"], format: uuid }
+        active: { type: boolean, description: "An active plan needs an installed device (`equipment_removed`)." }
+        notes: { type: [string, "null"], maxLength: 2000 }
+    MaintenanceEvent:
+      type: object
+      required: [id, tank_id, plan_id, equipment_id, title, performed_at, notes, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        tank_id: { type: string, format: uuid }
+        plan_id: { type: [string, "null"], format: uuid }
+        equipment_id: { type: [string, "null"], format: uuid }
+        title: { type: string }
+        performed_at: { type: string, format: date-time }
+        notes: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }

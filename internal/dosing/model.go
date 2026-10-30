@@ -324,16 +324,3 @@ func deviation(planned, actual *decimal.Decimal) string {
 	}
 	return ""
 }
-
-// idempotencyKeyOK accepts 8–128 printable ASCII characters.
-func idempotencyKeyOK(k string) bool {
-	if len(k) < 8 || len(k) > 128 {
-		return false
-	}
-	for i := range len(k) {
-		if k[i] < 0x21 || k[i] > 0x7e {
-			return false
-		}
-	}
-	return true
-}

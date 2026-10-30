@@ -139,6 +139,13 @@ differ — test to confirm."
 - **MaintenancePlan / MaintenanceEvent** — interval-based tasks (clean skimmer, replace carbon,
   calibrate probe), optionally tied to equipment.
 
+As implemented (2.6): no shared `EquipmentModel` catalog yet (manufacturer/model are free text
+on the device, open item EQ1). A device is removed with a date and reason, never deleted.
+Configuration versions are immutable flat key/value settings (never interpreted by ReefCare).
+A plan is due `interval_days` after the local date (plan time zone) of its latest performance,
+or on `starts_on`; overdue is derived and nothing is completed automatically. Removing the device
+or archiving the tank deactivates its plans; performed maintenance stays in history.
+
 ### Livestock
 - **Species** — reference (common/scientific name, category: fish, coral, invertebrate, other;
   coral type: SPS, LPS, soft).

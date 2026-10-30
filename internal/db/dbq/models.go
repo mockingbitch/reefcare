@@ -96,6 +96,18 @@ type DosingProduct struct {
 	UpdatedAt   time.Time
 }
 
+type EquipmentConfiguration struct {
+	ID          uuid.UUID
+	EquipmentID uuid.UUID
+	TankID      uuid.UUID
+	VersionNo   int32
+	Settings    json.RawMessage
+	EffectiveAt time.Time
+	Note        *string
+	CreatedBy   *uuid.UUID
+	CreatedAt   time.Time
+}
+
 type Job struct {
 	ID          int64
 	Kind        string
@@ -111,6 +123,38 @@ type Job struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	FinishedAt  *time.Time
+}
+
+type MaintenanceEvent struct {
+	ID             uuid.UUID
+	TankID         uuid.UUID
+	PlanID         *uuid.UUID
+	EquipmentID    *uuid.UUID
+	Title          string
+	PerformedAt    time.Time
+	Notes          *string
+	RecordedBy     *uuid.UUID
+	IdempotencyKey *string
+	RequestHash    []byte
+	CreatedAt      time.Time
+}
+
+type MaintenancePlan struct {
+	ID              uuid.UUID
+	TankID          uuid.UUID
+	EquipmentID     *uuid.UUID
+	Title           string
+	IntervalDays    int32
+	Timezone        string
+	StartsOn        time.Time
+	LastPerformedAt *time.Time
+	NextDueOn       time.Time
+	Active          bool
+	Notes           *string
+	CreatedBy       *uuid.UUID
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	Version         int32
 }
 
 type Tank struct {
@@ -133,6 +177,26 @@ type Tank struct {
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	Version        int32
+}
+
+type TankEquipment struct {
+	ID            uuid.UUID
+	TankID        uuid.UUID
+	Category      string
+	Name          string
+	Manufacturer  *string
+	Model         *string
+	SerialNumber  *string
+	PurchasedOn   *time.Time
+	WarrantyUntil *time.Time
+	InstalledAt   time.Time
+	RemovedAt     *time.Time
+	RemovalReason *string
+	Notes         *string
+	CreatedBy     *uuid.UUID
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	Version       int32
 }
 
 type TankEvent struct {

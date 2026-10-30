@@ -218,6 +218,20 @@ naturally idempotent (repeating the same request returns 200; a different one 40
 - `GET/POST /tanks/{tankID}/equipment`, `GET/PATCH /equipment/{id}`, `POST /equipment/{id}/remove`
 - `GET/POST /equipment/{id}/configurations`
 - `GET/POST /tanks/{tankID}/maintenance-plans`, `POST /maintenance-plans/{id}/events`
+
+Equipment and maintenance as implemented (2.6): `GET /tanks/{id}/equipment` lists installed
+devices (`?include=removed` for all), each with its current `configuration`; `POST
+/equipment/{id}/remove {removed_at, reason}` is idempotent and deactivates the device's plans;
+edits and new configurations on a removed device answer 409 `equipment_removed`. `PATCH
+/maintenance-plans/{id}` (merge patch, `version`) recomputes `next_due_on`; `active` toggles a
+plan. `GET/POST /tanks/{id}/maintenance-events` lists performed maintenance (`?plan_id`,
+`?equipment_id`, cursor) and records unplanned work. Plans and events reference a device on the
+same tank only (`equipment_not_found`); an active plan needs an installed device
+(`equipment_removed`, also when re-activating). `installed_at` is fixed at creation. A new
+configuration's `effective_at` is not before the current one's (`before_current`), so the latest
+version is the current one. Both event creates honour `Idempotency-Key` (shared helper
+`internal/platform/idempotency`, same contract as dosing ad-hoc doses). Timeline: `equipment.installed`, `equipment.removed`,
+`equipment.configuration_changed` (at `effective_at`), `maintenance.performed`.
 - `GET/POST /tanks/{tankID}/livestock`, `GET/PATCH /livestock/{id}`,
   `GET/POST /livestock/{id}/events`, `POST /livestock/{id}/reconcile`
 - `GET /species?q=` (search curated + own)

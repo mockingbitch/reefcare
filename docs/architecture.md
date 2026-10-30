@@ -165,8 +165,10 @@ Implemented in `internal/platform/jobs` (milestone 2.3, decision D3: in-house).
 | `dosing.mark_missed` | every 15 min | still-scheduled doses past their grace become `missed` (never completed) |
 | `jobs.cleanup` | daily | delete old succeeded and dead jobs |
 
-Planned (later milestones): `dosing.materialize`, `dosing.mark_missed`, `waterchanges.materialize`,
-`maintenance.due_check`, `waterparameters.staleness_check`, `notifications.deliver_email`.
+Maintenance needs no job: `next_due_on` is stored and overdue is derived when read. Reminders
+(notifications, 2.9) will add a due check.
+
+Planned (later milestones): `maintenance.due_check` (reminders), `waterparameters.staleness_check`, `notifications.deliver_email`.
 
 ## 6. Configuration
 

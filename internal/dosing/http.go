@@ -1,8 +1,6 @@
 package dosing
 
 import (
-	"crypto/sha256"
-	"encoding/json"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -14,6 +12,7 @@ import (
 	"reefcare/internal/platform/apperr"
 	"reefcare/internal/platform/decimal"
 	"reefcare/internal/platform/httpserver"
+	"reefcare/internal/platform/idempotency"
 	"reefcare/internal/platform/patch"
 	"reefcare/internal/tanks"
 )
@@ -400,9 +399,6 @@ type adHocRequest struct {
 	Notes      *string    `json:"notes"`
 }
 
-// IdempotencyKeyHeader makes a create safe to retry (docs/api-guidelines.md §1).
-const IdempotencyKeyHeader = "Idempotency-Key"
-
 func (h *Handler) adHoc(w http.ResponseWriter, r *http.Request) {
 	tankID, err := tanks.PathID(r, "tankID")
 	if err != nil {
@@ -414,28 +410,21 @@ func (h *Handler) adHoc(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
-	var key *string
-	if k := strings.TrimSpace(r.Header.Get(IdempotencyKeyHeader)); k != "" {
-		key = &k
-	}
-	// The request hash covers the route and the decoded body (re-encoded, so formatting
-	// differences don't matter) to detect a key reused for another request.
-	body, err := json.Marshal(req)
+	hash, err := idempotency.Hash("POST /tanks/"+tankID.String()+"/dosing-events", req)
 	if err != nil {
 		h.fail(w, r, err)
 		return
 	}
-	sum := sha256.Sum256(append([]byte("POST /tanks/"+tankID.String()+"/dosing-events\n"), body...))
 	e, created, err := h.svc.RecordAdHoc(r.Context(), tanks.ActorFrom(r), tankID, AdHocInput{
 		ProductID: req.ProductID, Amount: req.Amount, Unit: req.AmountUnit, ExecutedAt: req.ExecutedAt, Notes: req.Notes,
-	}, key, sum[:])
+	}, idempotency.Key(r), hash)
 	if err != nil {
 		h.fail(w, r, err)
 		return
 	}
 	status := http.StatusCreated
 	if !created {
-		w.Header().Set("Idempotent-Replayed", "true")
+		w.Header().Set(idempotency.ReplayedHeader, "true")
 	}
 	httpserver.WriteJSON(w, r, status, toEvent(e))
 }

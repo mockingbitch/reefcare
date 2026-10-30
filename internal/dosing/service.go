@@ -16,6 +16,7 @@ import (
 	"reefcare/internal/platform/clock"
 	"reefcare/internal/platform/database"
 	"reefcare/internal/platform/decimal"
+	"reefcare/internal/platform/idempotency"
 	"reefcare/internal/platform/jobs"
 	"reefcare/internal/platform/patch"
 	"reefcare/internal/platform/recurrence"
@@ -674,7 +675,7 @@ func (s *Service) RecordAdHoc(ctx context.Context, a tanks.Actor, tankID uuid.UU
 		c.instant("executed_at", at, now)
 	}
 	notes := c.text("notes", in.Notes, 2000, true)
-	if key != nil && !idempotencyKeyOK(*key) {
+	if key != nil && !idempotency.Valid(*key) {
 		v.Add("Idempotency-Key", "invalid", map[string]string{"format": "8-128 printable ASCII characters"})
 	}
 	err = database.InTx(ctx, s.pool, func(tx pgx.Tx) error {

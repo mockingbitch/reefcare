@@ -56,15 +56,10 @@ func TestAmountIsExact(t *testing.T) {
 	}
 }
 
-func TestDeviationAndKeys(t *testing.T) {
+func TestDeviation(t *testing.T) {
 	p, more, less := mustD("5"), mustD("7"), mustD("4")
 	if deviation(&p, &more) != "over" || deviation(&p, &less) != "under" || deviation(&p, &p) != "" || deviation(nil, &p) != "" {
 		t.Fatal("deviation")
-	}
-	for k, ok := range map[string]bool{"dose-0001": true, "short": false, "with space1": false, "ünïcode-key": false, string(make([]byte, 129)): false} {
-		if idempotencyKeyOK(k) != ok {
-			t.Errorf("key %q: %v", k, !ok)
-		}
 	}
 }
 

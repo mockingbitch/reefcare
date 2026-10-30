@@ -82,6 +82,17 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 | DS8 | `reason_code` for water changes | P3 | Water changes still store the archive skip as `skip_reason = 'tank_archived'` (free text); dosing uses a separate `reason_code` column |
 | DS9 | Composite FK from water_change_events (schedule_id, tank_id) to schedules | P3 | Dosing has it (plan_id, tank_id, product_id); add to water changes in a new migration |
 
+## 3d. Equipment & maintenance (milestone 2.6 done)
+
+| # | Item | Priority | Notes |
+|---|---|---|---|
+| EQ1 | Shared equipment model catalog (`equipment_models`, specs) | P3 | Manufacturer/model are free text on each device today |
+| EQ2 | Consumables on maintenance events (filter socks, carbon, media) | P3 | Not stored yet |
+| EQ3 | Maintenance reminders | P2 | With notifications (2.9); overdue is already derived |
+| EQ4 | Web screens for equipment, configurations and maintenance | P2 | Milestone 2.10 |
+| EQ5 | Correcting a mistaken maintenance event, configuration version or `installed_at` | P3 | All are fixed today; a correction must be audited (timeline correction event), never a silent rewrite |
+| EQ6 | Filtered maintenance history uses the `(col IS NULL OR col = $x)` pattern | P3 | Under a generic plan a filtered page may scan the tank's events (bounded per tank); split into per-filter queries if it shows up in query stats |
+
 ## 4. Security and identity follow-ups
 
 | # | Item | Priority | Source | Notes |

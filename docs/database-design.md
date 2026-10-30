@@ -384,6 +384,13 @@ CREATE INDEX dosing_due ON dosing_events (scheduled_for) WHERE status = 'schedul
 --    pre_test_id / post_test_id → water_tests). Overdue is derived: status='scheduled' AND scheduled_for < now() - grace.
 --   UNIQUE (schedule_id, scheduled_for).
 
+-- Implemented in db/migrations/00008_equipment_maintenance.sql (milestone 2.6) with: no
+-- equipment_models catalog yet (manufacturer/model/name are text on tank_equipment, open item
+-- EQ1); no status column (removed_at IS NULL = installed); composite FKs (equipment_id, tank_id)
+-- keep configurations, plans and events on the device's tank; settings is a flat jsonb object
+-- ≤ 8 KB; plans use interval_days 1..730 + timezone + starts_on and store next_due_on (local
+-- date, recomputed on perform/edit), with overdue derived; events carry title, optional plan_id
+-- and equipment_id, no consumables yet. Original sketch:
 -- equipment_models(id, category, manufacturer, model, specs jsonb, owner_id NULL=global)
 -- tank_equipment(id, tank_id, model_id NULL, display_name, category, serial_number, purchased_on,
 --   warranty_until, installed_at, removed_at, status, version)
