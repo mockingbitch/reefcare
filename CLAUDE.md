@@ -41,7 +41,9 @@ Designer. Detailed, path-scoped rules live in `.claude/rules/` and load automati
   scheduler, resolve, ad-hoc doses with per-row Idempotency-Key). 2.6 equipment & maintenance is done
   (`internal/equipment`: devices removed-not-deleted, immutable configuration versions with
   timeline events, interval maintenance plans with derived overdue, performed/unplanned events).
-  Next: 2.7 livestock; 2.1/2.2 once the D5 domain reviewer is named.
+  2.7 livestock is done (`internal/livestock`: private species, entries whose quantity is the
+  event sum with no negative balance in event order, events, reconcile; photos are open item LS1).
+  Next: 2.8 timeline API or 2.9 notifications; 2.1/2.2 once the D5 domain reviewer is named.
 - Unfinished work, known gaps and pending decisions are tracked in `docs/open-items.md`;
   update it when an item is completed or a new gap is found.
 - Go module path is `reefcare`. Migrations use sequential numbering (`make migration name=...`).

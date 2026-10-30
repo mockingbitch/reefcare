@@ -20,6 +20,7 @@ import (
 	"reefcare/internal/dosing"
 	"reefcare/internal/equipment"
 	"reefcare/internal/identity"
+	"reefcare/internal/livestock"
 	"reefcare/internal/platform/clock"
 	"reefcare/internal/platform/database"
 	"reefcare/internal/platform/httpserver"
@@ -142,6 +143,7 @@ func New(d Deps) App {
 	idSvc.OnErase(waterchanges.EraseUserData)
 	idSvc.OnErase(dosing.EraseUserData)
 	idSvc.OnErase(equipment.EraseUserData)
+	idSvc.OnErase(livestock.EraseUserData)
 	idSvc.OnErase(tanks.EraseUserData)
 	idSvc.RegisterJobs(runner)
 	idHTTP := identity.NewHandler(idSvc, d.Log, d.Config.SecureCookies())
@@ -157,6 +159,7 @@ func New(d Deps) App {
 	doseSvc.RegisterJobs(runner)
 	doseHTTP := dosing.NewHandler(doseSvc, idHTTP.RequireAuth, d.Log)
 	eqHTTP := equipment.NewHandler(equipment.NewService(d.Pool, d.Clock, d.Log), idHTTP.RequireAuth, d.Log)
+	lsHTTP := livestock.NewHandler(livestock.NewService(d.Pool, d.Clock, d.Log), idHTTP.RequireAuth, d.Log)
 
 	var observe func(http.Handler) http.Handler
 	if d.Metrics != nil {
@@ -170,10 +173,11 @@ func New(d Deps) App {
 		Mount: func(api chi.Router) {
 			api.Use(idHTTP.Authenticate)
 			idHTTP.Mount(api)
-			tankHTTP.Mount(api, wcHTTP.MountTank, doseHTTP.MountTank, eqHTTP.MountTank)
+			tankHTTP.Mount(api, wcHTTP.MountTank, doseHTTP.MountTank, eqHTTP.MountTank, lsHTTP.MountTank)
 			wcHTTP.Mount(api)
 			doseHTTP.Mount(api)
 			eqHTTP.Mount(api)
+			lsHTTP.Mount(api)
 		},
 	})
 	return App{Handler: handler, Jobs: runner}

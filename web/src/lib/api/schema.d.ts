@@ -2869,6 +2869,495 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/species": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search curated and own species by name (signed in) */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Substring of a Vietnamese, English or scientific name (case-insensitive). */
+                    q?: string;
+                    category?: components["schemas"]["LivestockCategory"];
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Curated species first, then your own (never paginated). */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: components["schemas"]["Species"][];
+                            next_cursor: null;
+                        };
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+            };
+        };
+        put?: never;
+        /** Add a private species, usable only on your tanks */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SpeciesCreate"];
+                };
+            };
+            responses: {
+                /** @description Created. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Species"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                /** @description `limit_reached` (500 own species) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                422: components["responses"]["Unprocessable"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tanks/{tankID}/livestock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                tankID: components["parameters"]["TankID"];
+            };
+            cookie?: never;
+        };
+        /** The tank's livestock, newest first (owner or viewer) */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description `gone` adds groups whose quantity reached 0. */
+                    include?: "gone";
+                };
+                header?: never;
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    tankID: components["parameters"]["TankID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description All entries (never paginated; at most 500 per tank). */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: components["schemas"]["LivestockEntry"][];
+                            next_cursor: null;
+                        };
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        /** Add livestock (owner; idempotent with Idempotency-Key); records an `added` event */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                    /**
+                     * @description Makes a create safe to retry: a retry returns the first result (header
+                     *     `Idempotent-Replayed: true`); the same key with a different request is 422
+                     *     `idempotency_key_reused`.
+                     */
+                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                };
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    tankID: components["parameters"]["TankID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["LivestockEntryCreate"];
+                };
+            };
+            responses: {
+                /** @description Added. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LivestockEntry"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `tank_archived` or `limit_reached` (500 present groups, 5000 entries ever) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                422: components["responses"]["Unprocessable"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/livestock/{entryID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                entryID: components["parameters"]["LivestockEntryID"];
+            };
+            cookie?: never;
+        };
+        /** One entry (owner or viewer) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    entryID: components["parameters"]["LivestockEntryID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LivestockEntry"];
+                    };
+                };
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit an entry's description (owner, merge patch, `version` required)
+         * @description The quantity changes only through events and reconciliation; `version` covers the
+         *     description and is not bumped by events.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    entryID: components["parameters"]["LivestockEntryID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["LivestockEntryPatch"];
+                };
+            };
+            responses: {
+                /** @description Updated. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LivestockEntry"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `version_conflict` or `tank_archived` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                422: components["responses"]["Unprocessable"];
+            };
+        };
+        trace?: never;
+    };
+    "/api/v1/livestock/{entryID}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                entryID: components["parameters"]["LivestockEntryID"];
+            };
+            cookie?: never;
+        };
+        /** The entry's history, newest first (owner or viewer) */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: components["parameters"]["Limit"];
+                    /** @description Opaque `next_cursor` from the previous page. */
+                    cursor?: components["parameters"]["Cursor"];
+                };
+                header?: never;
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    entryID: components["parameters"]["LivestockEntryID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A page of events. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: components["schemas"]["LivestockEvent"][];
+                            next_cursor: string | null;
+                        };
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        /**
+         * Record an event (owner; idempotent with Idempotency-Key)
+         * @description Quantity events take a positive `quantity`:
+         *     arrivals `added` (from outside), `transferred_in` (from another tank), `propagated`
+         *     (fragging, splitting, reproduction in the system), `found` (a missing animal turned up);
+         *     losses `died` (seen), `missing` (fate unknown — never treated as a death),
+         *     `transferred_out` (moved, rehomed, traded, returned), `sold`.
+         *     Observations (`health_observation`, `treatment`) take a `note` and no quantity.
+         *     `occurred_at` may be in the past but not before the entry was added (422 `before_added`).
+         *     No running balance may leave 0..100000 in event order, also for a late, backdated event
+         *     (409 `quantity_underflow` / `quantity_overflow`). History is never edited: correct a
+         *     count with `/reconcile`. ReefCare records observations; it does not diagnose.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                    /**
+                     * @description Makes a create safe to retry: a retry returns the first result (header
+                     *     `Idempotent-Replayed: true`); the same key with a different request is 422
+                     *     `idempotency_key_reused`.
+                     */
+                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                };
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    entryID: components["parameters"]["LivestockEntryID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {unknown} */
+                        type: "added" | "transferred_in" | "propagated" | "found" | "died" | "missing" | "transferred_out" | "sold" | "health_observation" | "treatment";
+                        quantity?: number;
+                        /**
+                         * Format: date-time
+                         * @description Default now; not in the future.
+                         */
+                        occurred_at?: string;
+                        note?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Recorded. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LivestockEvent"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `quantity_underflow`, `quantity_overflow`, `limit_reached` (2000 quantity events or 5000 observations per entry) or `tank_archived` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                422: components["responses"]["Unprocessable"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/livestock/{entryID}/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                entryID: components["parameters"]["LivestockEntryID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set the actual count (owner)
+         * @description Records a `reconciliation` event with the difference between `count` and the balance at
+         *     `occurred_at`; earlier events are kept. A count equal to that balance records nothing.
+         *     Send `Idempotency-Key` (or the same `occurred_at`) when retrying: a retry without either
+         *     reconciles again at the new time. `occurred_at` before the entry was added is 422
+         *     `before_added`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                    /**
+                     * @description Makes a create safe to retry: a retry returns the first result (header
+                     *     `Idempotent-Replayed: true`); the same key with a different request is 422
+                     *     `idempotency_key_reused`.
+                     */
+                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                };
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    entryID: components["parameters"]["LivestockEntryID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        count: number;
+                        /**
+                         * Format: date-time
+                         * @description Default now; not before the entry was added.
+                         */
+                        occurred_at?: string;
+                        note?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description The entry after reconciling. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LivestockEntry"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `quantity_underflow` (a later event would drop below zero), `quantity_overflow`, `limit_reached` (2000 quantity events) or `tank_archived` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                422: components["responses"]["Unprocessable"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3521,6 +4010,120 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
+        /** @enum {unknown} */
+        LivestockCategory: "fish" | "coral" | "invertebrate" | "algae" | "other";
+        /** @enum {unknown} */
+        CoralType: "sps" | "lps" | "soft" | "non_photosynthetic";
+        Species: {
+            /** Format: uuid */
+            id: string;
+            /** @description True for the shared catalog; false for your own. */
+            curated: boolean;
+            category: components["schemas"]["LivestockCategory"];
+            coral_type: components["schemas"]["CoralType"] | null;
+            common_name_vi: string | null;
+            common_name_en: string | null;
+            scientific_name: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        /** @description At least one name is required (`name_required`); `coral_type` only for corals (`coral_only`). */
+        SpeciesCreate: {
+            category: components["schemas"]["LivestockCategory"];
+            coral_type?: components["schemas"]["CoralType"] | null;
+            common_name_vi?: string | null;
+            common_name_en?: string | null;
+            scientific_name?: string | null;
+        };
+        /** @enum {unknown} */
+        LivestockForm: "individual" | "group" | "frag" | "colony";
+        LivestockEntry: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tank_id: string;
+            species: {
+                /** Format: uuid */
+                id: string;
+                common_name_vi: string | null;
+                common_name_en: string | null;
+                scientific_name: string | null;
+            } | null;
+            category: components["schemas"]["LivestockCategory"];
+            coral_type: components["schemas"]["CoralType"] | null;
+            display_name: string;
+            form: components["schemas"]["LivestockForm"] | null;
+            quarantine_status: ("in_quarantine" | "completed") | null;
+            location_note: string | null;
+            source_note: string | null;
+            notes: string | null;
+            /** @description Sum of the entry's event deltas. A colony, a frag plug or a rock of zoanthids counts as 1. */
+            current_quantity: number;
+            /** @description current_quantity > 0; a gone group stays in history. */
+            present: boolean;
+            /** Format: date-time */
+            added_at: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            version: number;
+        };
+        LivestockEntryCreate: {
+            /**
+             * Format: uuid
+             * @description Curated or your own (`species_not_found`).
+             */
+            species_id?: string | null;
+            /** @description Defaults to the species' category; required without a species (`species_mismatch` if it differs). */
+            category?: components["schemas"]["LivestockCategory"] | null;
+            display_name: string;
+            quantity: number;
+            /**
+             * Format: date-time
+             * @description Default now; not in the future.
+             */
+            added_at?: string;
+            form?: components["schemas"]["LivestockForm"] | null;
+            /** @description Corals only (`coral_only`); defaults to the species' coral type (`species_mismatch` if it differs). */
+            coral_type?: components["schemas"]["CoralType"] | null;
+            quarantine_status?: ("in_quarantine" | "completed") | null;
+            location_note?: string | null;
+            source_note?: string | null;
+            notes?: string | null;
+        };
+        LivestockEntryPatch: {
+            version: number;
+            /**
+             * Format: uuid
+             * @description Changing it alone takes the species' category.
+             */
+            species_id?: string | null;
+            category?: components["schemas"]["LivestockCategory"];
+            display_name?: string;
+            form?: components["schemas"]["LivestockForm"] | null;
+            /** @description Corals only (`coral_only`); defaults to the species' coral type (`species_mismatch` if it differs). */
+            coral_type?: components["schemas"]["CoralType"] | null;
+            quarantine_status?: ("in_quarantine" | "completed") | null;
+            location_note?: string | null;
+            source_note?: string | null;
+            notes?: string | null;
+        };
+        LivestockEvent: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            entry_id: string;
+            /** @enum {unknown} */
+            type: "added" | "transferred_in" | "propagated" | "found" | "died" | "missing" | "transferred_out" | "sold" | "reconciliation" | "health_observation" | "treatment";
+            /** @description Positive for additions, negative for losses, 0 for observations. */
+            quantity_delta: number;
+            /** Format: date-time */
+            occurred_at: string;
+            note: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
     };
     responses: {
         /** @description Accepted. */
@@ -3609,6 +4212,8 @@ export interface components {
          *     `idempotency_key_reused`.
          */
         IdempotencyKey: string;
+        /** @description A malformed ID is answered like an unknown one (404). */
+        LivestockEntryID: string;
         /** @description A malformed ID is answered like an unknown one (404). */
         EquipmentID: string;
         /** @description A malformed ID is answered like an unknown one (404). */

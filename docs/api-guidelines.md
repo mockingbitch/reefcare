@@ -236,6 +236,17 @@ version is the current one. Both event creates honour `Idempotency-Key` (shared 
   `GET/POST /livestock/{id}/events`, `POST /livestock/{id}/reconcile`
 - `GET /species?q=` (search curated + own)
 
+Livestock as implemented (2.7): `GET/POST /species` (`?q`, `?category`, `?limit`; create =
+private species). `POST /tanks/{id}/livestock` creates an entry with its `added` event and
+honours `Idempotency-Key`; `GET` lists present groups (`?include=gone` for all). `PATCH
+/livestock/{id}` edits the description only (`version`). `POST /livestock/{id}/events` records
+`added|transferred_in|propagated|found|died|missing|transferred_out|sold` (positive `quantity`) or
+`health_observation|treatment` (`note`, no quantity), honours `Idempotency-Key`, and answers 409
+`quantity_underflow` when any balance in event order would drop below 0. `POST
+/livestock/{id}/reconcile {count, occurred_at, note}` records the difference (`Idempotency-Key` supported). A
+retry with a used key is answered even after the tank was archived. Timeline:
+`livestock.<type>` in category `livestock`.
+
 ### Notifications
 - `GET /api/v1/notifications?unread=true`, `POST /api/v1/notifications/{id}/read`,
   `POST /api/v1/notifications/read-all`

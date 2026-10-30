@@ -32,6 +32,7 @@ tags:
   - name: dosing
   - name: equipment
   - name: maintenance
+  - name: livestock
 
 paths:
   /healthz:
@@ -1437,6 +1438,256 @@ paths:
         "422": { $ref: "#/components/responses/Unprocessable" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
+  /api/v1/species:
+    get:
+      tags: [livestock]
+      summary: Search curated and own species by name (signed in)
+      parameters:
+        - { name: q, in: query, description: "Substring of a Vietnamese, English or scientific name (case-insensitive).", schema: { type: string, maxLength: 100 } }
+        - { name: category, in: query, schema: { $ref: "#/components/schemas/LivestockCategory" } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        "200":
+          description: Curated species first, then your own (never paginated).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Species" } }
+                  next_cursor: { type: "null" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+    post:
+      tags: [livestock]
+      summary: Add a private species, usable only on your tanks
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SpeciesCreate" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Species" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "409":
+          description: "`limit_reached` (500 own species)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+  /api/v1/tanks/{tankID}/livestock:
+    parameters: [{ $ref: "#/components/parameters/TankID" }]
+    get:
+      tags: [livestock]
+      summary: The tank's livestock, newest first (owner or viewer)
+      parameters:
+        - name: include
+          in: query
+          description: "`gone` adds groups whose quantity reached 0."
+          schema: { enum: [gone] }
+      responses:
+        "200":
+          description: All entries (never paginated; at most 500 per tank).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/LivestockEntry" } }
+                  next_cursor: { type: "null" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [livestock]
+      summary: Add livestock (owner; idempotent with Idempotency-Key); records an `added` event
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LivestockEntryCreate" }
+      responses:
+        "201":
+          description: Added.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LivestockEntry" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`tank_archived` or `limit_reached` (500 present groups, 5000 entries ever)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+  /api/v1/livestock/{entryID}:
+    parameters: [{ $ref: "#/components/parameters/LivestockEntryID" }]
+    get:
+      tags: [livestock]
+      summary: One entry (owner or viewer)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LivestockEntry" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [livestock]
+      summary: Edit an entry's description (owner, merge patch, `version` required)
+      description: |
+        The quantity changes only through events and reconciliation; `version` covers the
+        description and is not bumped by events.
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LivestockEntryPatch" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LivestockEntry" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`version_conflict` or `tank_archived`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+  /api/v1/livestock/{entryID}/events:
+    parameters: [{ $ref: "#/components/parameters/LivestockEntryID" }]
+    get:
+      tags: [livestock]
+      summary: The entry's history, newest first (owner or viewer)
+      parameters:
+        - { $ref: "#/components/parameters/Limit" }
+        - { $ref: "#/components/parameters/Cursor" }
+      responses:
+        "200":
+          description: A page of events.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/LivestockEvent" } }
+                  next_cursor: { type: [string, "null"] }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [livestock]
+      summary: Record an event (owner; idempotent with Idempotency-Key)
+      description: |
+        Quantity events take a positive `quantity`:
+        arrivals `added` (from outside), `transferred_in` (from another tank), `propagated`
+        (fragging, splitting, reproduction in the system), `found` (a missing animal turned up);
+        losses `died` (seen), `missing` (fate unknown — never treated as a death),
+        `transferred_out` (moved, rehomed, traded, returned), `sold`.
+        Observations (`health_observation`, `treatment`) take a `note` and no quantity.
+        `occurred_at` may be in the past but not before the entry was added (422 `before_added`).
+        No running balance may leave 0..100000 in event order, also for a late, backdated event
+        (409 `quantity_underflow` / `quantity_overflow`). History is never edited: correct a
+        count with `/reconcile`. ReefCare records observations; it does not diagnose.
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [type]
+              properties:
+                type: { enum: [added, transferred_in, propagated, found, died, missing, transferred_out, sold, health_observation, treatment] }
+                quantity: { type: integer, minimum: 1, maximum: 10000 }
+                occurred_at: { type: string, format: date-time, description: Default now; not in the future. }
+                note: { type: [string, "null"], maxLength: 2000 }
+      responses:
+        "201":
+          description: Recorded.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LivestockEvent" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`quantity_underflow`, `quantity_overflow`, `limit_reached` (2000 quantity events or 5000 observations per entry) or `tank_archived`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+  /api/v1/livestock/{entryID}/reconcile:
+    parameters: [{ $ref: "#/components/parameters/LivestockEntryID" }]
+    post:
+      tags: [livestock]
+      summary: Set the actual count (owner)
+      description: |
+        Records a `reconciliation` event with the difference between `count` and the balance at
+        `occurred_at`; earlier events are kept. A count equal to that balance records nothing.
+        Send `Idempotency-Key` (or the same `occurred_at`) when retrying: a retry without either
+        reconciles again at the new time. `occurred_at` before the entry was added is 422
+        `before_added`.
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [count]
+              properties:
+                count: { type: integer, minimum: 0, maximum: 100000 }
+                occurred_at: { type: string, format: date-time, description: Default now; not before the entry was added. }
+                note: { type: [string, "null"], maxLength: 2000 }
+      responses:
+        "200":
+          description: The entry after reconciling.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LivestockEntry" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`quantity_underflow` (a later event would drop below zero), `quantity_overflow`, `limit_reached` (2000 quantity events) or `tank_archived`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+
 security:
   - session: []
 
@@ -1469,6 +1720,12 @@ components:
         `Idempotent-Replayed: true`); the same key with a different request is 422
         `idempotency_key_reused`.
       schema: { type: string, minLength: 8, maxLength: 128 }
+    LivestockEntryID:
+      name: entryID
+      in: path
+      required: true
+      description: A malformed ID is answered like an unknown one (404).
+      schema: { type: string, format: uuid }
     EquipmentID:
       name: equipmentID
       in: path
@@ -2153,4 +2410,124 @@ components:
         title: { type: string }
         performed_at: { type: string, format: date-time }
         notes: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+    LivestockCategory:
+      enum: [fish, coral, invertebrate, algae, other]
+    CoralType:
+      enum: [sps, lps, soft, non_photosynthetic]
+    Species:
+      type: object
+      required: [id, curated, category, coral_type, common_name_vi, common_name_en, scientific_name, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        curated: { type: boolean, description: "True for the shared catalog; false for your own." }
+        category: { $ref: "#/components/schemas/LivestockCategory" }
+        coral_type:
+          oneOf: [{ $ref: "#/components/schemas/CoralType" }, { type: "null" }]
+        common_name_vi: { type: [string, "null"] }
+        common_name_en: { type: [string, "null"] }
+        scientific_name: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+    SpeciesCreate:
+      type: object
+      additionalProperties: false
+      required: [category]
+      description: At least one name is required (`name_required`); `coral_type` only for corals (`coral_only`).
+      properties:
+        category: { $ref: "#/components/schemas/LivestockCategory" }
+        coral_type:
+          oneOf: [{ $ref: "#/components/schemas/CoralType" }, { type: "null" }]
+        common_name_vi: { type: [string, "null"], maxLength: 100 }
+        common_name_en: { type: [string, "null"], maxLength: 100 }
+        scientific_name: { type: [string, "null"], maxLength: 150 }
+    LivestockForm:
+      enum: [individual, group, frag, colony]
+    LivestockEntry:
+      type: object
+      required: [id, tank_id, species, category, coral_type, display_name, form, quarantine_status, location_note,
+                 source_note, notes, current_quantity, present, added_at, created_at, updated_at, version]
+      properties:
+        id: { type: string, format: uuid }
+        tank_id: { type: string, format: uuid }
+        species:
+          oneOf:
+            - type: object
+              required: [id, common_name_vi, common_name_en, scientific_name]
+              properties:
+                id: { type: string, format: uuid }
+                common_name_vi: { type: [string, "null"] }
+                common_name_en: { type: [string, "null"] }
+                scientific_name: { type: [string, "null"] }
+            - { type: "null" }
+        category: { $ref: "#/components/schemas/LivestockCategory" }
+        coral_type:
+          oneOf: [{ $ref: "#/components/schemas/CoralType" }, { type: "null" }]
+        display_name: { type: string }
+        form:
+          oneOf: [{ $ref: "#/components/schemas/LivestockForm" }, { type: "null" }]
+        quarantine_status:
+          oneOf: [{ enum: [in_quarantine, completed] }, { type: "null" }]
+        location_note: { type: [string, "null"] }
+        source_note: { type: [string, "null"] }
+        notes: { type: [string, "null"] }
+        current_quantity:
+          type: integer
+          minimum: 0
+          description: Sum of the entry's event deltas. A colony, a frag plug or a rock of zoanthids counts as 1.
+        present: { type: boolean, description: "current_quantity > 0; a gone group stays in history." }
+        added_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        version: { type: integer }
+    LivestockEntryCreate:
+      type: object
+      additionalProperties: false
+      required: [display_name, quantity]
+      properties:
+        species_id: { type: [string, "null"], format: uuid, description: "Curated or your own (`species_not_found`)." }
+        category:
+          description: Defaults to the species' category; required without a species (`species_mismatch` if it differs).
+          oneOf: [{ $ref: "#/components/schemas/LivestockCategory" }, { type: "null" }]
+        display_name: { type: string, minLength: 1, maxLength: 100 }
+        quantity: { type: integer, minimum: 1, maximum: 10000 }
+        added_at: { type: string, format: date-time, description: Default now; not in the future. }
+        form:
+          oneOf: [{ $ref: "#/components/schemas/LivestockForm" }, { type: "null" }]
+        coral_type:
+          description: Corals only (`coral_only`); defaults to the species' coral type (`species_mismatch` if it differs).
+          oneOf: [{ $ref: "#/components/schemas/CoralType" }, { type: "null" }]
+        quarantine_status:
+          oneOf: [{ enum: [in_quarantine, completed] }, { type: "null" }]
+        location_note: { type: [string, "null"], maxLength: 200 }
+        source_note: { type: [string, "null"], maxLength: 200 }
+        notes: { type: [string, "null"], maxLength: 2000 }
+    LivestockEntryPatch:
+      type: object
+      additionalProperties: false
+      required: [version]
+      properties:
+        version: { type: integer }
+        species_id: { type: [string, "null"], format: uuid, description: "Changing it alone takes the species' category." }
+        category: { $ref: "#/components/schemas/LivestockCategory" }
+        display_name: { type: string, minLength: 1, maxLength: 100 }
+        form:
+          oneOf: [{ $ref: "#/components/schemas/LivestockForm" }, { type: "null" }]
+        coral_type:
+          description: Corals only (`coral_only`); defaults to the species' coral type (`species_mismatch` if it differs).
+          oneOf: [{ $ref: "#/components/schemas/CoralType" }, { type: "null" }]
+        quarantine_status:
+          oneOf: [{ enum: [in_quarantine, completed] }, { type: "null" }]
+        location_note: { type: [string, "null"], maxLength: 200 }
+        source_note: { type: [string, "null"], maxLength: 200 }
+        notes: { type: [string, "null"], maxLength: 2000 }
+    LivestockEvent:
+      type: object
+      required: [id, entry_id, type, quantity_delta, occurred_at, note, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        entry_id: { type: string, format: uuid }
+        type: { enum: [added, transferred_in, propagated, found, died, missing, transferred_out, sold, reconciliation, health_observation, treatment] }
+        quantity_delta: { type: integer, description: "Positive for additions, negative for losses, 0 for observations." }
+        occurred_at: { type: string, format: date-time }
+        note: { type: [string, "null"] }
         created_at: { type: string, format: date-time }

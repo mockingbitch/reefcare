@@ -157,6 +157,18 @@ or archiving the tank deactivates its plans; performed maintenance stays in hist
 Invariant: `current_quantity = Σ quantity_delta ≥ 0` at every point in event order; enforced in
 the service under a row lock on the entry and mirrored in a cached column with a CHECK ≥ 0.
 
+As implemented (2.7): event types also include `propagated` (growth inside the system),
+`missing` (an unseen loss, fate unknown — never a death) and `found`; category `algae`; entries
+carry their own `coral_type` (defaulting to the species') and an optional `quarantine_status`
+(`in_quarantine`, `completed`). Counting convention: a colony, a frag plug or a rock of
+zoanthids is 1; partial die-off is an observation. Event order is `(occurred_at, id)` at
+microsecond precision; a late, backdated event is checked
+against every later balance (409 `quantity_underflow`), and nothing may happen before the entry's
+`added_at`. Reconcile stores `count − balance at occurred_at` (a zero difference stores nothing).
+Health observations and treatments need a note and carry no quantity; ReefCare records them and
+never diagnoses. A group at 0 is "gone" and stays in history. The curated species catalog is
+empty until the D5 reviewer seeds it; keepers add private species. No photos yet (LS1).
+
 ### Timeline
 - **TankEvent** — append-only projection: tank, `occurred_at`, category, type, source module +
   source id, actor, short summary payload. Written in the same transaction as the source change.

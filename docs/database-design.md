@@ -399,6 +399,12 @@ CREATE INDEX dosing_due ON dosing_events (scheduled_for) WHERE status = 'schedul
 -- maintenance_plans(id, tank_id, tank_equipment_id NULL, title, interval interval, next_due_at, active)
 -- maintenance_events(id, plan_id NULL, tank_id, performed_at, notes, consumables jsonb)
 
+-- Implemented in db/migrations/00009_livestock.sql (milestone 2.7) with: species.owner_id
+-- RESTRICT (erasure deletes own species explicitly) and at least one name; livestock_entries
+-- has category (defaults to the species'), added_at, notes, created_by and an idempotency key,
+-- no status column (current_quantity = 0 means gone); livestock_events has a composite FK
+-- (entry_id, tank_id), a note instead of details jsonb (required for observations) and an
+-- idempotency key. Original sketch:
 CREATE TABLE species (
   id               uuid PRIMARY KEY DEFAULT uuidv7(),
   category         text NOT NULL CHECK (category IN ('fish','coral','invertebrate','other')),
@@ -518,7 +524,8 @@ query plans show degradation.
 ## 8. Concurrency and idempotency
 
 - Optimistic `version` on tanks, plans, stocks, livestock entries: `UPDATE ... WHERE id=$1 AND version=$2`.
-- Livestock quantity: `SELECT ... FOR UPDATE` on the entry, insert event, update cached quantity.
+- Livestock quantity: `SELECT ... FOR NO KEY UPDATE` on the entry, check every running balance with
+  the new event in `(occurred_at, id)` order, insert event, update cached quantity.
 - Occurrence materialization: `INSERT ... ON CONFLICT (plan_id, scheduled_for) DO NOTHING`.
 - Device/retried ingestion: `Idempotency-Key` → `idempotency_keys`.
 - Notifications: `UNIQUE (user_id, dedupe_key)`.

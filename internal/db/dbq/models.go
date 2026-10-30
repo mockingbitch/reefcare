@@ -125,6 +125,42 @@ type Job struct {
 	FinishedAt  *time.Time
 }
 
+type LivestockEntry struct {
+	ID               uuid.UUID
+	TankID           uuid.UUID
+	SpeciesID        *uuid.UUID
+	Category         string
+	CoralType        *string
+	DisplayName      string
+	Form             *string
+	QuarantineStatus *string
+	LocationNote     *string
+	SourceNote       *string
+	Notes            *string
+	CurrentQuantity  int32
+	AddedAt          time.Time
+	CreatedBy        *uuid.UUID
+	IdempotencyKey   *string
+	RequestHash      []byte
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	Version          int32
+}
+
+type LivestockEvent struct {
+	ID             uuid.UUID
+	EntryID        uuid.UUID
+	TankID         uuid.UUID
+	EventType      string
+	QuantityDelta  int32
+	OccurredAt     time.Time
+	Note           *string
+	RecordedBy     *uuid.UUID
+	IdempotencyKey *string
+	RequestHash    []byte
+	CreatedAt      time.Time
+}
+
 type MaintenanceEvent struct {
 	ID             uuid.UUID
 	TankID         uuid.UUID
@@ -155,6 +191,17 @@ type MaintenancePlan struct {
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 	Version         int32
+}
+
+type Species struct {
+	ID             uuid.UUID
+	OwnerID        *uuid.UUID
+	Category       string
+	CoralType      *string
+	CommonNameVi   *string
+	CommonNameEn   *string
+	ScientificName *string
+	CreatedAt      time.Time
 }
 
 type Tank struct {

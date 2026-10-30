@@ -143,6 +143,19 @@ No percentages are shown.
 | `NH-AMMONIA-NITRITE` | parameter_deviation | tank status `active` | ammonia or nitrite > hard welfare threshold | **urgent** warning; verify with second test; escalation guidance |
 | `NM-NEXT` | next_measurements | always | — | recommended tests based on stale data and tank type |
 
+What counts as a loss for `LC-LOSSES` (livestock events, milestone 2.7):
+- **Death:** only `died` (a death the keeper saw).
+- **Unaccounted for:** `missing` is reported separately as "unaccounted for", never as a death.
+- **Not a loss:** `sold` and `transferred_out` (moved, rehomed, traded, returned).
+- **Count correction:** a negative `reconciliation` is at most "unexplained decrease (count
+  correction)". A large one (e.g. a clean-up crew recounted from 30 to 12) may prompt the
+  keeper to look; it is never stated as deaths.
+- **Not a new arrival:** `propagated` (fragging, splitting, reproduction) is not an arrival from
+  outside; only `added` (and `transferred_in` from another tank) count for "recent new arrival"
+  rules.
+- **Observations:** `health_observation` and `treatment` notes are the keeper's words. Rules
+  never turn them into a disease name and never suggest a treatment.
+
 Thresholds are product decisions to be reviewed by a reef-domain reviewer before release
 (decision D5) and live in versioned rule code, not in user-editable config.
 

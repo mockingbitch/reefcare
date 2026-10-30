@@ -93,6 +93,20 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 | EQ5 | Correcting a mistaken maintenance event, configuration version or `installed_at` | P3 | All are fixed today; a correction must be audited (timeline correction event), never a silent rewrite |
 | EQ6 | Filtered maintenance history uses the `(col IS NULL OR col = $x)` pattern | P3 | Under a generic plan a filtered page may scan the tank's events (bounded per tank); split into per-filter queries if it shows up in query stats |
 
+## 3e. Livestock (milestone 2.7 done)
+
+| # | Item | Priority | Notes |
+|---|---|---|---|
+| LS1 | Livestock and tank photos (decision D2) | P2 | Needs S3-compatible storage and the upload pipeline from `.claude/rules/security.md` (magic bytes, EXIF strip, signed URLs); build it as its own slice |
+| LS2 | Curated species catalog seed | P2 | `db/seed/`, reviewed by the D5 domain expert; until then only private species. Add a unique index on `lower(scientific_name) WHERE owner_id IS NULL` with the seed |
+| LS3 | Transfer between the keeper's own tanks in one step | P3 | Today: `transferred_out` here + a new entry (or `transferred_in`) there |
+| LS4 | Accent-insensitive species search (`unaccent`/trigram index) | P3 | Plain lower-case substring today ("ca he" doesn't find "Cá hề") |
+| LS5 | Structured observation details (symptoms, tissue/colour) | P3 | Phase 3 symptoms/intelligence; only a free-text note today |
+| LS6 | Web screens for livestock | P2 | Milestone 2.10. Domain-review requirements: counting help ("a colony, a frag plug or a rock of zoanthids is 1"; partial die-off is an observation); "rehomed / traded / returned" maps to `transferred_out`; quantity is approximate for algae, pods and clean-up crews |
+| LS7 | Enforce `current_quantity = Σ deltas` in the database | P3 | Go-only today (under the entry lock, tested); a deferred constraint trigger could recompute it (≤ 2000 moves per entry) |
+| LS8 | Frag lineage (`parent_entry_id`) and approximate counts | P3 | From the domain review; also coral size / tissue extent later |
+| LS9 | Search depends on the database locale for `lower()` of Vietnamese | P3 | Works with en_US.utf8; pin the production locale or solve with LS4 |
+
 ## 4. Security and identity follow-ups
 
 | # | Item | Priority | Source | Notes |
