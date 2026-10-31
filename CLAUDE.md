@@ -75,7 +75,10 @@ Designer. Detailed, path-scoped rules live in `.claude/rules/` and load automati
   after checking the change). 3.4 assessment service is done (`intelligence.Service`: snapshot
   from `waterparameters.ForAssessment` + registered `intelligence.Source`s, persists immutable
   assessments with evidence and knowledge refs, timeline `assessment.created`, manual POST and the
-  `intelligence.assess_after_test` job). Next: 3.5 history, feedback and web UI.
+  `intelligence.assess_after_test` job). 3.5 history and feedback is done (feedback + retraction
+  API; web `.../assessments/`, `#lib/assessments.js` renders `ia_*` messages — every rule text key
+  must have vi/en messages, checked by `TestEveryTextKeyIsTranslated`). Next: 3.6 optional LLM
+  narrative adapter (ask which provider first; default none).
 - Unfinished work, known gaps and pending decisions are tracked in `docs/open-items.md`;
   update it when an item is completed or a new gap is found.
 - Go module path is `reefcare`. Migrations use sequential numbering (`make migration name=...`).

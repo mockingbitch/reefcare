@@ -286,7 +286,11 @@ keeps the newest rows when a kind of data hits its limit and says so (`DQ-SNAPSH
 snapshot over 3.5 MB is refused (409 `snapshot_too_large`). Findings carry i18n
 `{key, params}` texts, evidence refs, hypotheses with supporting/contradicting facts, safety
 warnings (never removed) and exact knowledge versions; `provisional: true` while thresholds await
-D5. Assessments are immutable (trigger); only retraction (3.5) changes their status.
+D5. Assessments are immutable (trigger); only retraction changes their status.
+History and feedback (3.5): `PUT /assessments/{id}/feedback {rating, outcome_note}` (anyone who
+may read the tank; one rating per user, replaced on resend; returned as `my_feedback`);
+`POST /assessments/{id}/retract {reason}` (owner, one way, audited, on the timeline; the
+assessment stays readable).
 
 Knowledge as implemented (3.1): readers use `GET /knowledge?locale&parameter&q` and
 `GET /knowledge/{slug}?locale` (published only; the other locale as fallback). Editors (role

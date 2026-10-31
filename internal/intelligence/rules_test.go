@@ -6,6 +6,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -183,5 +184,116 @@ func TestSnapshotLimitIsReported(t *testing.T) {
 	res := Evaluate(s)
 	if len(res.Findings) != 1 || res.Findings[0].RuleID != "DQ-SNAPSHOT-LIMIT" || len(res.Findings[0].Missing) != 1 {
 		t.Fatalf("%+v", res.Findings)
+	}
+}
+
+// Every text key the rules can emit has a Vietnamese and an English message in the web app
+// (web/src/lib/assessments.ts renders "ia_" + key with dots as underscores).
+func TestEveryTextKeyIsTranslated(t *testing.T) {
+	keys := map[string]bool{"knowledge.safety_warning": true, "dq.snapshot_limit.summary": true, "dq.snapshot_limit.kind": true}
+	for _, b := range welfareBounds { // derived from the bounds, as ruleWelfareBounds builds them
+		for _, side := range []string{"low", "high"} {
+			keys["wb."+b.param+"."+side+".summary"] = true
+		}
+		if b.intentionLow {
+			keys["wb."+b.param+".low.if_unintended.summary"] = true
+		}
+		if b.urgentBelow != nil || b.urgentAbove != nil {
+			keys["safety.welfare_"+b.param] = true
+		}
+	}
+	for _, side := range []string{"below", "above"} {
+		keys["pd.summary."+side], keys["pd.observation."+side], keys["pi.trend.summary."+side] = true, true, true
+	}
+	var collect func(v any)
+	collect = func(v any) {
+		switch x := v.(type) {
+		case map[string]any:
+			if k, ok := x["key"].(string); ok {
+				if _, isText := x["params"]; isText || len(x) == 1 {
+					keys[k] = true
+				}
+			}
+			for _, y := range x {
+				collect(y)
+			}
+		case []any:
+			for _, y := range x {
+				collect(y)
+			}
+		}
+	}
+	// Literal keys in the rules' source (dynamic ones are listed above).
+	src, err := os.ReadFile("rules.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range regexp.MustCompile(`t\("([a-z_]+(?:\.[a-z_]+)+)"[,)]`).FindAllStringSubmatch(string(src), -1) {
+		keys[m[1]] = true
+	}
+	goldens, err := filepath.Glob(filepath.Join("testdata", "golden", "*.json"))
+	if err != nil || len(goldens) == 0 {
+		t.Fatalf("no golden files (%v)", err)
+	}
+	// Texts as emitted (key + params), to check each message's placeholders are provided.
+	type emitted struct {
+		key    string
+		params map[string]any
+	}
+	var texts []emitted
+	var gather func(v any)
+	gather = func(v any) {
+		switch x := v.(type) {
+		case map[string]any:
+			if k, ok := x["key"].(string); ok {
+				if ps, ok := x["params"].(map[string]any); ok {
+					texts = append(texts, emitted{k, ps})
+				} else if len(x) == 1 {
+					texts = append(texts, emitted{k, nil})
+				}
+			}
+			for _, y := range x {
+				gather(y)
+			}
+		case []any:
+			for _, y := range x {
+				gather(y)
+			}
+		}
+	}
+	for _, g := range goldens {
+		raw, err := os.ReadFile(g)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var v any
+		if err := json.Unmarshal(raw, &v); err != nil {
+			t.Fatal(err)
+		}
+		collect(v)
+		gather(v)
+	}
+	for _, locale := range []string{"vi", "en"} {
+		raw, err := os.ReadFile(filepath.Join("..", "..", "web", "messages", locale+".json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var msgs map[string]string
+		if err := json.Unmarshal(raw, &msgs); err != nil {
+			t.Fatal(err)
+		}
+		for k := range keys {
+			if _, ok := msgs["ia_"+strings.ReplaceAll(k, ".", "_")]; !ok {
+				t.Errorf("%s: no message for %q", locale, k)
+			}
+		}
+		placeholder := regexp.MustCompile(`\{(\w+)\}`)
+		for _, e := range texts {
+			for _, m := range placeholder.FindAllStringSubmatch(msgs["ia_"+strings.ReplaceAll(e.key, ".", "_")], -1) {
+				if _, ok := e.params[m[1]]; !ok {
+					t.Errorf("%s: message for %q uses {%s}, which the rule doesn't send", locale, e.key, m[1])
+				}
+			}
+		}
 	}
 }

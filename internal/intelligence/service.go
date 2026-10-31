@@ -81,7 +81,8 @@ type Assessment struct {
 	RetractedAt      *time.Time
 	RetractReason    *string
 	CreatedAt        time.Time
-	Result           *Result // nil in lists
+	Result           *Result   // nil in lists
+	MyFeedback       *Feedback // the caller's feedback (single assessments only)
 }
 
 // Limits on automatic assessments (one per tank per window, assessing the latest state; at
@@ -404,7 +405,12 @@ func (s *Service) Get(ctx context.Context, a tanks.Actor, id uuid.UUID) (Assessm
 	if _, err := s.authz.Require(ctx, q, a.UserID, tankID, tanks.PermRead); err != nil {
 		return Assessment{}, err
 	}
-	return s.load(ctx, q, id, true)
+	out, err := s.load(ctx, q, id, true)
+	if err != nil {
+		return Assessment{}, err
+	}
+	out.MyFeedback, err = s.myFeedback(ctx, q, a.UserID, id)
+	return out, err
 }
 
 func (s *Service) load(ctx context.Context, q *dbq.Queries, id uuid.UUID, withResult bool) (Assessment, error) {
@@ -432,6 +438,12 @@ func (s *Service) load(ctx context.Context, q *dbq.Queries, id uuid.UUID, withRe
 // EraseUserData deletes the assessments of the erased account's tanks (identity.Eraser); it
 // must run before tanks.EraseUserData.
 func EraseUserData(ctx context.Context, q *dbq.Queries, userID uuid.UUID) error {
+	if err := q.DeleteUserAssessmentFeedback(ctx, userID); err != nil {
+		return err
+	}
+	if err := q.DeleteOwnerAssessmentFeedback(ctx, userID); err != nil {
+		return err
+	}
 	if err := q.DeleteOwnerAssessmentEvidence(ctx, userID); err != nil {
 		return err
 	}

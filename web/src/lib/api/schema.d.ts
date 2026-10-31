@@ -4970,6 +4970,131 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/assessments/{assessmentID}/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assessmentID: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Rate an assessment (anyone who may read its tank; replaces your earlier rating)
+         * @description Reviewers use "wrong" ratings to adjust rules or knowledge; the assessment itself never changes.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path: {
+                    assessmentID: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {unknown} */
+                        rating: "useful" | "not_useful" | "wrong";
+                        /** @description What happened afterwards, e.g. a re-test result. */
+                        outcome_note?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Recorded. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AssessmentFeedback"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                404: components["responses"]["NotFound"];
+                422: components["responses"]["Unprocessable"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assessments/{assessmentID}/retract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assessmentID: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retract an assessment with a reason (owner; one way)
+         * @description It stays readable, marked retracted; its content never changes. Audited and on the timeline.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path: {
+                    assessmentID: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        reason: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Retracted. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Assessment"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `already_retracted` or `tank_archived` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                422: components["responses"]["Unprocessable"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -6185,6 +6310,14 @@ export interface components {
             created_at: string;
             /** @description Only in single-assessment responses. */
             findings?: components["schemas"]["Finding"][];
+            my_feedback?: components["schemas"]["AssessmentFeedback"];
+        };
+        AssessmentFeedback: {
+            /** @enum {unknown} */
+            rating: "useful" | "not_useful" | "wrong";
+            outcome_note: string | null;
+            /** Format: date-time */
+            updated_at: string;
         };
     };
     responses: {

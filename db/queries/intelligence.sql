@@ -60,3 +60,27 @@ WHERE assessment_id IN (SELECT a.id FROM assessments a JOIN tanks t ON t.id = a.
 
 -- name: DeleteOwnerAssessments :exec
 DELETE FROM assessments WHERE tank_id IN (SELECT id FROM tanks WHERE owner_id = @owner_id);
+
+-- name: UpsertAssessmentFeedback :exec
+INSERT INTO assessment_feedback (assessment_id, user_id, rating, outcome_note, created_at, updated_at)
+VALUES (@assessment_id, @user_id, @rating, sqlc.narg(outcome_note), @now, @now)
+ON CONFLICT (assessment_id, user_id) DO UPDATE
+SET rating = EXCLUDED.rating, outcome_note = EXCLUDED.outcome_note, updated_at = EXCLUDED.updated_at;
+
+-- name: GetAssessmentFeedback :one
+SELECT rating, outcome_note, updated_at FROM assessment_feedback WHERE assessment_id = @assessment_id AND user_id = @user_id;
+
+-- name: LockAssessment :one
+SELECT tank_id, status FROM assessments WHERE id = @id FOR NO KEY UPDATE;
+
+-- name: RetractAssessment :execrows
+UPDATE assessments SET status = 'retracted', retracted_at = sqlc.arg(now)::timestamptz, retract_reason = @reason
+WHERE id = @id AND status = 'generated';
+
+-- name: DeleteUserAssessmentFeedback :exec
+-- Account erasure: the user's own feedback, and any on the user's tanks' assessments.
+DELETE FROM assessment_feedback WHERE user_id = @user_id;
+
+-- name: DeleteOwnerAssessmentFeedback :exec
+DELETE FROM assessment_feedback
+WHERE assessment_id IN (SELECT a.id FROM assessments a JOIN tanks t ON t.id = a.tank_id WHERE t.owner_id = @owner_id);

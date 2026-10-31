@@ -35,6 +35,8 @@ func (h *Handler) Mount(r chi.Router) {
 	r.Group(func(r chi.Router) {
 		r.Use(h.auth)
 		r.Get("/assessments/{assessmentID}", h.get)
+		r.Put("/assessments/{assessmentID}/feedback", h.feedback)
+		r.Post("/assessments/{assessmentID}/retract", h.retract)
 	})
 }
 
@@ -43,23 +45,34 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 }
 
 type assessmentResponse struct {
-	ID               uuid.UUID  `json:"id"`
-	TankID           uuid.UUID  `json:"tank_id"`
-	Trigger          string     `json:"trigger"`
-	WaterTestID      *uuid.UUID `json:"water_test_id"`
-	Status           string     `json:"status"`
-	FindingCount     int32      `json:"finding_count"`
-	MaxSeverity      *string    `json:"max_severity"`
-	Confidence       string     `json:"confidence_label"`
-	RuleVersion      string     `json:"rule_version"`
-	Provisional      bool       `json:"provisional"`
-	KnowledgeVersion string     `json:"knowledge_version,omitempty"`
-	SnapshotVersion  int32      `json:"input_snapshot_version,omitempty"`
-	Locale           string     `json:"locale,omitempty"`
-	RetractedAt      *time.Time `json:"retracted_at,omitempty"`
-	RetractReason    *string    `json:"retract_reason,omitempty"`
-	CreatedAt        time.Time  `json:"created_at"`
-	Findings         []Finding  `json:"findings,omitempty"`
+	ID               uuid.UUID         `json:"id"`
+	TankID           uuid.UUID         `json:"tank_id"`
+	Trigger          string            `json:"trigger"`
+	WaterTestID      *uuid.UUID        `json:"water_test_id"`
+	Status           string            `json:"status"`
+	FindingCount     int32             `json:"finding_count"`
+	MaxSeverity      *string           `json:"max_severity"`
+	Confidence       string            `json:"confidence_label"`
+	RuleVersion      string            `json:"rule_version"`
+	Provisional      bool              `json:"provisional"`
+	KnowledgeVersion string            `json:"knowledge_version,omitempty"`
+	SnapshotVersion  int32             `json:"input_snapshot_version,omitempty"`
+	Locale           string            `json:"locale,omitempty"`
+	RetractedAt      *time.Time        `json:"retracted_at,omitempty"`
+	RetractReason    *string           `json:"retract_reason,omitempty"`
+	CreatedAt        time.Time         `json:"created_at"`
+	Findings         []Finding         `json:"findings,omitempty"`
+	MyFeedback       *feedbackResponse `json:"my_feedback,omitempty"`
+}
+
+type feedbackResponse struct {
+	Rating      string    `json:"rating"`
+	OutcomeNote *string   `json:"outcome_note"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+func toFeedback(f Feedback) *feedbackResponse {
+	return &feedbackResponse{Rating: f.Rating, OutcomeNote: f.OutcomeNote, UpdatedAt: f.UpdatedAt.UTC()}
 }
 
 func toResponse(a Assessment) assessmentResponse {
@@ -67,6 +80,9 @@ func toResponse(a Assessment) assessmentResponse {
 		FindingCount: a.FindingCount, MaxSeverity: a.MaxSeverity, Confidence: a.Confidence, RuleVersion: a.RuleVersion,
 		Provisional: a.Provisional, KnowledgeVersion: a.KnowledgeVersion, SnapshotVersion: a.SnapshotVersion, Locale: a.Locale,
 		RetractedAt: a.RetractedAt, RetractReason: a.RetractReason, CreatedAt: a.CreatedAt.UTC()}
+	if a.MyFeedback != nil {
+		out.MyFeedback = toFeedback(*a.MyFeedback)
+	}
 	if a.Result != nil {
 		out.Findings = a.Result.Findings
 		if out.Findings == nil {
@@ -125,6 +141,49 @@ func (h *Handler) get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a, err := h.svc.Get(r.Context(), tanks.ActorFrom(r), id)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	httpserver.WriteJSON(w, r, http.StatusOK, toResponse(a))
+}
+
+func (h *Handler) feedback(w http.ResponseWriter, r *http.Request) {
+	id, err := tanks.PathID(r, "assessmentID")
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	var req struct {
+		Rating      string  `json:"rating"`
+		OutcomeNote *string `json:"outcome_note"`
+	}
+	if err := httpserver.DecodeJSON(r, &req); err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	f, err := h.svc.GiveFeedback(r.Context(), tanks.ActorFrom(r), id, req.Rating, req.OutcomeNote)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	httpserver.WriteJSON(w, r, http.StatusOK, toFeedback(f))
+}
+
+func (h *Handler) retract(w http.ResponseWriter, r *http.Request) {
+	id, err := tanks.PathID(r, "assessmentID")
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	var req struct {
+		Reason *string `json:"reason"`
+	}
+	if err := httpserver.DecodeJSON(r, &req); err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	a, err := h.svc.Retract(r.Context(), tanks.ActorFrom(r), id, req.Reason)
 	if err != nil {
 		h.fail(w, r, err)
 		return

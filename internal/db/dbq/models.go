@@ -41,6 +41,15 @@ type AssessmentEvidence struct {
 	RefID        uuid.UUID
 }
 
+type AssessmentFeedback struct {
+	AssessmentID uuid.UUID
+	UserID       uuid.UUID
+	Rating       string
+	OutcomeNote  *string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
 type AssessmentKnowledgeRef struct {
 	AssessmentID uuid.UUID
 	VersionID    uuid.UUID

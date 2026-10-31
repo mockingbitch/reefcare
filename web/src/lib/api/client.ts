@@ -53,6 +53,10 @@ export type KnowledgeArticle = Schemas['KnowledgeArticle'];
 export type KnowledgeSource = Schemas['KnowledgeSource'];
 export type ClaimClass = Schemas['ClaimClass'];
 export type KnowledgeCategory = Schemas['KnowledgeCategory'];
+export type Assessment = Schemas['Assessment'];
+export type Finding = Schemas['Finding'];
+export type I18nText = Schemas['I18nText'];
+export type AssessmentFeedback = Schemas['AssessmentFeedback'];
 export type Page<T> = { items: T[]; next_cursor: string | null };
 
 export type ErrorDetail = { field?: string; code: string; params?: Record<string, string> };

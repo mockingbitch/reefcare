@@ -2433,6 +2433,68 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /api/v1/assessments/{assessmentID}/feedback:
+    parameters: [{ name: assessmentID, in: path, required: true, schema: { type: string, format: uuid } }]
+    put:
+      tags: [intelligence]
+      summary: Rate an assessment (anyone who may read its tank; replaces your earlier rating)
+      description: Reviewers use "wrong" ratings to adjust rules or knowledge; the assessment itself never changes.
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [rating]
+              properties:
+                rating: { enum: [useful, not_useful, wrong] }
+                outcome_note: { type: [string, "null"], maxLength: 2000, description: "What happened afterwards, e.g. a re-test result." }
+      responses:
+        "200":
+          description: Recorded.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssessmentFeedback" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+  /api/v1/assessments/{assessmentID}/retract:
+    parameters: [{ name: assessmentID, in: path, required: true, schema: { type: string, format: uuid } }]
+    post:
+      tags: [intelligence]
+      summary: Retract an assessment with a reason (owner; one way)
+      description: It stays readable, marked retracted; its content never changes. Audited and on the timeline.
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        "200":
+          description: Retracted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Assessment" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`already_retracted` or `tank_archived`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+
 security:
   - session: []
 
@@ -3735,3 +3797,11 @@ components:
         retract_reason: { type: string }
         created_at: { type: string, format: date-time }
         findings: { type: array, description: Only in single-assessment responses., items: { $ref: "#/components/schemas/Finding" } }
+        my_feedback: { $ref: "#/components/schemas/AssessmentFeedback" }
+    AssessmentFeedback:
+      type: object
+      required: [rating, outcome_note, updated_at]
+      properties:
+        rating: { enum: [useful, not_useful, wrong] }
+        outcome_note: { type: [string, "null"] }
+        updated_at: { type: string, format: date-time }

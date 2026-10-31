@@ -68,6 +68,10 @@ export function errorMessage(e: ApiError): string {
 			return m.err_own_review();
 		case 'article_retired':
 			return m.err_article_retired();
+		case 'snapshot_too_large':
+			return m.err_snapshot_too_large();
+		case 'already_retracted':
+			return m.err_already_retracted();
 		case 'not_author':
 			return m.err_not_author();
 		case 'author_unknown':

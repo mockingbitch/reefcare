@@ -148,6 +148,9 @@
 				<a href={resolve('/(app)/tanks/[id]/water-tests', { id: tank.id })}>{m.wp_title()}</a>
 			</li>
 			<li>
+				<a href={resolve('/(app)/tanks/[id]/assessments', { id: tank.id })}>{m.ia_title()}</a>
+			</li>
+			<li>
 				<a href={resolve('/(app)/tanks/[id]/water-changes', { id: tank.id })}
 					>{m.tank_section_water_changes()}</a
 				>

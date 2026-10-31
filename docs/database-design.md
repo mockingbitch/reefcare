@@ -480,6 +480,10 @@ CREATE INDEX ON notifications (user_id, created_at DESC) WHERE read_at IS NULL;
 
 ## 5. Phase 3 — knowledge and intelligence (summary)
 
+Feedback in `db/migrations/00015_assessment_feedback.sql`: `assessment_feedback (assessment_id,
+user_id)` PK, `rating`, `outcome_note`; erasure deletes the user's feedback and all feedback on
+their tanks' assessments.
+
 Assessments implemented in `db/migrations/00014_assessments.sql` (3.4): `assessments` stores the
 validated `result`, the `input_snapshot` (≤ 4 MB), `snapshot_version`, `rule_version`,
 `knowledge_version` (hash of cited version ids), `provisional`, `locale`, `trigger` and

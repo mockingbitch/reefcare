@@ -128,6 +128,16 @@ func (q *Queries) DeleteOwnerAssessmentEvidence(ctx context.Context, ownerID uui
 	return err
 }
 
+const deleteOwnerAssessmentFeedback = `-- name: DeleteOwnerAssessmentFeedback :exec
+DELETE FROM assessment_feedback
+WHERE assessment_id IN (SELECT a.id FROM assessments a JOIN tanks t ON t.id = a.tank_id WHERE t.owner_id = $1)
+`
+
+func (q *Queries) DeleteOwnerAssessmentFeedback(ctx context.Context, ownerID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteOwnerAssessmentFeedback, ownerID)
+	return err
+}
+
 const deleteOwnerAssessmentRefs = `-- name: DeleteOwnerAssessmentRefs :exec
 DELETE FROM assessment_knowledge_refs
 WHERE assessment_id IN (SELECT a.id FROM assessments a JOIN tanks t ON t.id = a.tank_id WHERE t.owner_id = $1)
@@ -144,6 +154,16 @@ DELETE FROM assessments WHERE tank_id IN (SELECT id FROM tanks WHERE owner_id = 
 
 func (q *Queries) DeleteOwnerAssessments(ctx context.Context, ownerID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, deleteOwnerAssessments, ownerID)
+	return err
+}
+
+const deleteUserAssessmentFeedback = `-- name: DeleteUserAssessmentFeedback :exec
+DELETE FROM assessment_feedback WHERE user_id = $1
+`
+
+// Account erasure: the user's own feedback, and any on the user's tanks' assessments.
+func (q *Queries) DeleteUserAssessmentFeedback(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteUserAssessmentFeedback, userID)
 	return err
 }
 
@@ -198,6 +218,28 @@ func (q *Queries) GetAssessment(ctx context.Context, id uuid.UUID) (GetAssessmen
 		&i.RetractReason,
 		&i.CreatedAt,
 	)
+	return i, err
+}
+
+const getAssessmentFeedback = `-- name: GetAssessmentFeedback :one
+SELECT rating, outcome_note, updated_at FROM assessment_feedback WHERE assessment_id = $1 AND user_id = $2
+`
+
+type GetAssessmentFeedbackParams struct {
+	AssessmentID uuid.UUID
+	UserID       uuid.UUID
+}
+
+type GetAssessmentFeedbackRow struct {
+	Rating      string
+	OutcomeNote *string
+	UpdatedAt   time.Time
+}
+
+func (q *Queries) GetAssessmentFeedback(ctx context.Context, arg GetAssessmentFeedbackParams) (GetAssessmentFeedbackRow, error) {
+	row := q.db.QueryRow(ctx, getAssessmentFeedback, arg.AssessmentID, arg.UserID)
+	var i GetAssessmentFeedbackRow
+	err := row.Scan(&i.Rating, &i.OutcomeNote, &i.UpdatedAt)
 	return i, err
 }
 
@@ -301,4 +343,65 @@ func (q *Queries) ListAssessments(ctx context.Context, arg ListAssessmentsParams
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockAssessment = `-- name: LockAssessment :one
+SELECT tank_id, status FROM assessments WHERE id = $1 FOR NO KEY UPDATE
+`
+
+type LockAssessmentRow struct {
+	TankID uuid.UUID
+	Status string
+}
+
+func (q *Queries) LockAssessment(ctx context.Context, id uuid.UUID) (LockAssessmentRow, error) {
+	row := q.db.QueryRow(ctx, lockAssessment, id)
+	var i LockAssessmentRow
+	err := row.Scan(&i.TankID, &i.Status)
+	return i, err
+}
+
+const retractAssessment = `-- name: RetractAssessment :execrows
+UPDATE assessments SET status = 'retracted', retracted_at = $1::timestamptz, retract_reason = $2
+WHERE id = $3 AND status = 'generated'
+`
+
+type RetractAssessmentParams struct {
+	Now    time.Time
+	Reason *string
+	ID     uuid.UUID
+}
+
+func (q *Queries) RetractAssessment(ctx context.Context, arg RetractAssessmentParams) (int64, error) {
+	result, err := q.db.Exec(ctx, retractAssessment, arg.Now, arg.Reason, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const upsertAssessmentFeedback = `-- name: UpsertAssessmentFeedback :exec
+INSERT INTO assessment_feedback (assessment_id, user_id, rating, outcome_note, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $5)
+ON CONFLICT (assessment_id, user_id) DO UPDATE
+SET rating = EXCLUDED.rating, outcome_note = EXCLUDED.outcome_note, updated_at = EXCLUDED.updated_at
+`
+
+type UpsertAssessmentFeedbackParams struct {
+	AssessmentID uuid.UUID
+	UserID       uuid.UUID
+	Rating       string
+	OutcomeNote  *string
+	Now          time.Time
+}
+
+func (q *Queries) UpsertAssessmentFeedback(ctx context.Context, arg UpsertAssessmentFeedbackParams) error {
+	_, err := q.db.Exec(ctx, upsertAssessmentFeedback,
+		arg.AssessmentID,
+		arg.UserID,
+		arg.Rating,
+		arg.OutcomeNote,
+		arg.Now,
+	)
+	return err
 }

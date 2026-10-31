@@ -155,8 +155,8 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 | IN6 | Rate limit for manual assessments is per process | P3 | Same as S1 |
 | IN7 | Snapshot bounds | P3 | 90 days, ≤ 5000 readings, 5000 dosing events, 2000 livestock events; past a limit only the newest rows are kept and `DQ-SNAPSHOT-LIMIT` says so. Sensor imports will need per-parameter windows |
 | IN8 | Retention of automatic assessments | P3 | Each keeps a snapshot (≤ 3.5 MB); bounded to 24 per tank per day, but nothing is ever purged. Consider keeping only the latest automatic one per day after 90 days |
-| IN9 | Retraction endpoint | P2 | The schema and trigger allow a one-way retraction with a reason; the API comes with 3.5 |
-| IN10 | Frontend must render knowledge text in findings as untrusted | P1 for 3.5 | `knowledge.safety_warning` params and reference titles are editor-written: plain text only, links built from slugs |
+| IN11 | Reviewer view of "wrong" feedback | P2 | Feedback is stored (index on wrong ratings) but no admin page lists it yet; reviewers query it for now |
+| IN12 | Evidence drill-down in the web app | P3 | Findings show how many facts back them; linking each to its reading or event page is not built |
 
 ## 4. Security and identity follow-ups
 

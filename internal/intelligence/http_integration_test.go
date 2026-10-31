@@ -247,3 +247,61 @@ func TestKnowledgeLocaleAndMissingArticles(t *testing.T) {
 		t.Fatalf("locale fallback: %v %v", a["locale"], refs)
 	}
 }
+
+func TestFeedbackAndRetraction(t *testing.T) {
+	e := apptest.New(t)
+	owner, _ := e.SignUp("lan@example.com", "Lan")
+	viewer, _ := e.SignUp("minh@example.com", "Minh")
+	stranger, _ := e.SignUp("eve@example.com", "Eve")
+	tank := owner.Expect(owner.Do("POST", "/tanks", map[string]any{
+		"name": "Nano", "tank_type": "mixed_reef", "status": "active", "display_volume_l": "60", "system_volume_l": "72",
+	}), http.StatusCreated, "").Body["id"].(string)
+	owner.Expect(owner.Do("POST", "/tanks/"+tank+"/shares", map[string]string{"email": "minh@example.com"}), http.StatusCreated, "")
+	id := owner.Expect(owner.Do("POST", "/tanks/"+tank+"/assessments", nil), http.StatusCreated, "").Body["id"].(string)
+	path := "/assessments/" + id
+
+	// Each reader rates it once (a second rating replaces the first).
+	viewer.Expect(viewer.Do("PUT", path+"/feedback", map[string]any{"rating": "useful"}), http.StatusOK, "")
+	owner.Expect(owner.Do("PUT", path+"/feedback", map[string]any{"rating": "not_useful"}), http.StatusOK, "")
+	f := owner.Expect(owner.Do("PUT", path+"/feedback", map[string]any{"rating": "wrong", "outcome_note": "Re-tested: the kit was expired."}), http.StatusOK, "").Body
+	if f["rating"] != "wrong" || f["outcome_note"] != "Re-tested: the kit was expired." {
+		t.Fatalf("feedback: %v", f)
+	}
+	if mine := owner.Do("GET", path, nil).Body["my_feedback"].(map[string]any); mine["rating"] != "wrong" {
+		t.Fatalf("my feedback: %v", mine)
+	}
+	if mine := viewer.Do("GET", path, nil).Body["my_feedback"].(map[string]any); mine["rating"] != "useful" {
+		t.Fatalf("viewer feedback: %v", mine)
+	}
+	if n := count(t, e, `SELECT count(*) FROM assessment_feedback WHERE assessment_id = $1`, id); n != 2 {
+		t.Fatalf("feedback rows = %d", n)
+	}
+	r := owner.Expect(owner.Do("PUT", path+"/feedback", map[string]any{"rating": "meh"}), http.StatusUnprocessableEntity, "validation_failed")
+	if r.FieldCodes()["rating"] != "unsupported" {
+		t.Fatalf("%v", r.FieldCodes())
+	}
+	stranger.Expect(stranger.Do("PUT", path+"/feedback", map[string]any{"rating": "useful"}), http.StatusNotFound, "not_found")
+
+	// Only the owner retracts, once, with a reason; it stays readable.
+	viewer.Expect(viewer.Do("POST", path+"/retract", map[string]any{"reason": "x"}), http.StatusForbidden, "forbidden")
+	stranger.Expect(stranger.Do("POST", path+"/retract", map[string]any{"reason": "x"}), http.StatusNotFound, "not_found")
+	owner.Expect(owner.Do("POST", path+"/retract", map[string]any{}), http.StatusUnprocessableEntity, "validation_failed")
+	got := owner.Expect(owner.Do("POST", path+"/retract", map[string]any{"reason": "Readings were from the wrong tank."}), http.StatusOK, "").Body
+	if got["status"] != "retracted" || got["retract_reason"] != "Readings were from the wrong tank." || got["retracted_at"] == nil {
+		t.Fatalf("retracted: %v", got)
+	}
+	owner.Expect(owner.Do("POST", path+"/retract", map[string]any{"reason": "again"}), http.StatusConflict, "already_retracted")
+	viewer.Expect(viewer.Do("GET", path, nil), http.StatusOK, "")
+	if n := count(t, e, `SELECT count(*) FROM audit_logs WHERE action = 'assessment.retracted'`) + count(t, e, `SELECT count(*) FROM tank_events WHERE event_type = 'assessment.retracted'`); n != 2 {
+		t.Fatalf("audit + timeline = %d", n)
+	}
+
+	// Erasure of the viewer removes only their feedback; of the owner, everything.
+	viewer.Expect(viewer.Do("DELETE", "/me", map[string]string{"password": apptest.Password}), http.StatusAccepted, "")
+	owner.Expect(owner.Do("DELETE", "/me", map[string]string{"password": apptest.Password}), http.StatusAccepted, "")
+	e.Clock.Advance(31 * 24 * time.Hour)
+	e.RunJobs()
+	if n := count(t, e, `SELECT count(*) FROM assessment_feedback`) + count(t, e, `SELECT count(*) FROM assessments`); n != 0 {
+		t.Fatalf("%d rows left after erasure", n)
+	}
+}
