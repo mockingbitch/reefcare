@@ -222,3 +222,20 @@ WHERE e.status = 'missed' AND t.status <> 'archived'
   AND (e.missed_at, e.id) > (sqlc.arg(after_at)::timestamptz, sqlc.arg(after_id)::uuid)
 ORDER BY e.missed_at, e.id
 LIMIT @batch;
+
+-- name: ListDosingPlansForAssessment :many
+SELECT p.id, d.name AS product_name, p.status, p.delivery_method
+FROM dosing_plans p JOIN dosing_products d ON d.id = p.product_id
+WHERE p.tank_id = @tank_id
+ORDER BY p.created_at, p.id;
+
+-- name: ListDosingEventsForAssessment :many
+-- Assessment snapshot: the newest occurrences and doses in [since, until]
+-- (dosing_events_by_tank), newest first.
+SELECT id, plan_id, status, scheduled_for, executed_at
+FROM dosing_events
+WHERE tank_id = @tank_id
+  AND COALESCE(executed_at, scheduled_for) >= sqlc.arg(since)::timestamptz
+  AND COALESCE(executed_at, scheduled_for) <= sqlc.arg(until)::timestamptz
+ORDER BY COALESCE(executed_at, scheduled_for) DESC, id DESC
+LIMIT sqlc.arg(row_limit)::int;

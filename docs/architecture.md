@@ -173,6 +173,12 @@ Maintenance needs no job of its own: `next_due_on` is stored and overdue is deri
 its reminder source runs in `notifications.scan`. Reminder sources (`notifications.Source`) are
 registered by dosing, water changes and equipment; each reads only its own tables.
 
+| `intelligence.assess_after_test` | after water tests, per tank and 10-minute bucket | provisional assessment of the latest state (≤ 24 per tank per day) |
+
+Snapshot sources: the intelligence service loads readings and targets through
+`waterparameters.ForAssessment`; dosing, water changes, equipment and livestock register
+`intelligence.Source` functions that read only their own tables.
+
 Planned (later milestones): `waterparameters.staleness_check`.
 
 ## 6. Configuration

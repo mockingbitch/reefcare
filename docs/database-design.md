@@ -480,6 +480,13 @@ CREATE INDEX ON notifications (user_id, created_at DESC) WHERE read_at IS NULL;
 
 ## 5. Phase 3 — knowledge and intelligence (summary)
 
+Assessments implemented in `db/migrations/00014_assessments.sql` (3.4): `assessments` stores the
+validated `result`, the `input_snapshot` (≤ 4 MB), `snapshot_version`, `rule_version`,
+`knowledge_version` (hash of cited version ids), `provisional`, `locale`, `trigger` and
+`source_id` (the water test; unique per test), and is immutable except for retraction (trigger);
+`assessment_evidence (assessment_id, kind, ref_id)` and `assessment_knowledge_refs` (FK RESTRICT to
+versions). No `summary` column: summaries are i18n keys inside `result`.
+
 Knowledge implemented in `db/migrations/00013_knowledge.sql` (milestone 3.1): versions are per
 locale with `UNIQUE (article_id, locale, version_no)`, one published version per article and
 locale (partial unique index), `structured jsonb` (verifications, recommendations with claim

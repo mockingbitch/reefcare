@@ -118,3 +118,13 @@ DELETE FROM water_tests WHERE tank_id IN (SELECT id FROM tanks WHERE owner_id = 
 
 -- name: DeleteOwnerTargets :exec
 DELETE FROM parameter_targets WHERE tank_id IN (SELECT id FROM tanks WHERE owner_id = @owner_id);
+
+-- name: ListReadingsForAssessment :many
+-- Assessment snapshot: the newest valid readings in [since, until] (readings_recent), newest
+-- first; the caller reverses them and reports a full page as truncated.
+SELECT id, parameter, measured_at, canonical_value, estimate, method, test_kit
+FROM water_test_readings
+WHERE tank_id = @tank_id AND status = 'valid'
+  AND measured_at >= sqlc.arg(since)::timestamptz AND measured_at <= sqlc.arg(until)::timestamptz
+ORDER BY measured_at DESC, id DESC
+LIMIT sqlc.arg(row_limit)::int;

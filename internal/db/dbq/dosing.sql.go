@@ -564,6 +564,64 @@ func (q *Queries) ListDosingEvents(ctx context.Context, arg ListDosingEventsPara
 	return items, nil
 }
 
+const listDosingEventsForAssessment = `-- name: ListDosingEventsForAssessment :many
+SELECT id, plan_id, status, scheduled_for, executed_at
+FROM dosing_events
+WHERE tank_id = $1
+  AND COALESCE(executed_at, scheduled_for) >= $2::timestamptz
+  AND COALESCE(executed_at, scheduled_for) <= $3::timestamptz
+ORDER BY COALESCE(executed_at, scheduled_for) DESC, id DESC
+LIMIT $4::int
+`
+
+type ListDosingEventsForAssessmentParams struct {
+	TankID   uuid.UUID
+	Since    time.Time
+	Until    time.Time
+	RowLimit int32
+}
+
+type ListDosingEventsForAssessmentRow struct {
+	ID           uuid.UUID
+	PlanID       *uuid.UUID
+	Status       string
+	ScheduledFor *time.Time
+	ExecutedAt   *time.Time
+}
+
+// Assessment snapshot: the newest occurrences and doses in [since, until]
+// (dosing_events_by_tank), newest first.
+func (q *Queries) ListDosingEventsForAssessment(ctx context.Context, arg ListDosingEventsForAssessmentParams) ([]ListDosingEventsForAssessmentRow, error) {
+	rows, err := q.db.Query(ctx, listDosingEventsForAssessment,
+		arg.TankID,
+		arg.Since,
+		arg.Until,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDosingEventsForAssessmentRow{}
+	for rows.Next() {
+		var i ListDosingEventsForAssessmentRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PlanID,
+			&i.Status,
+			&i.ScheduledFor,
+			&i.ExecutedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listDosingPlans = `-- name: ListDosingPlans :many
 SELECT p.id, p.tank_id, p.product_id, d.name AS product_name, d.brand AS product_brand, d.form AS product_form,
        p.amount, p.amount_unit, p.rrule, p.timezone, p.starts_on, p.ends_on, p.delivery_method, p.status, p.notes,
@@ -625,6 +683,45 @@ func (q *Queries) ListDosingPlans(ctx context.Context, tankID uuid.UUID) ([]List
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Version,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDosingPlansForAssessment = `-- name: ListDosingPlansForAssessment :many
+SELECT p.id, d.name AS product_name, p.status, p.delivery_method
+FROM dosing_plans p JOIN dosing_products d ON d.id = p.product_id
+WHERE p.tank_id = $1
+ORDER BY p.created_at, p.id
+`
+
+type ListDosingPlansForAssessmentRow struct {
+	ID             uuid.UUID
+	ProductName    string
+	Status         string
+	DeliveryMethod string
+}
+
+func (q *Queries) ListDosingPlansForAssessment(ctx context.Context, tankID uuid.UUID) ([]ListDosingPlansForAssessmentRow, error) {
+	rows, err := q.db.Query(ctx, listDosingPlansForAssessment, tankID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDosingPlansForAssessmentRow{}
+	for rows.Next() {
+		var i ListDosingPlansForAssessmentRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProductName,
+			&i.Status,
+			&i.DeliveryMethod,
 		); err != nil {
 			return nil, err
 		}

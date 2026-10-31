@@ -31,6 +31,17 @@ func (q *Queries) CountLivestockEvents(ctx context.Context, entryID uuid.UUID) (
 	return i, err
 }
 
+const countLivestockPresent = `-- name: CountLivestockPresent :one
+SELECT COALESCE(sum(current_quantity), 0)::integer FROM livestock_entries WHERE tank_id = $1
+`
+
+func (q *Queries) CountLivestockPresent(ctx context.Context, tankID uuid.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, countLivestockPresent, tankID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countOwnSpecies = `-- name: CountOwnSpecies :one
 SELECT count(*) FROM species WHERE owner_id = $1
 `
@@ -539,6 +550,60 @@ func (q *Queries) ListLivestockEvents(ctx context.Context, arg ListLivestockEven
 			&i.OccurredAt,
 			&i.Note,
 			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLivestockEventsForAssessment = `-- name: ListLivestockEventsForAssessment :many
+SELECT id, entry_id, event_type, quantity_delta, occurred_at
+FROM livestock_events
+WHERE tank_id = $1 AND occurred_at >= $2::timestamptz AND occurred_at <= $3::timestamptz
+ORDER BY occurred_at DESC, id DESC
+LIMIT $4::int
+`
+
+type ListLivestockEventsForAssessmentParams struct {
+	TankID   uuid.UUID
+	Since    time.Time
+	Until    time.Time
+	RowLimit int32
+}
+
+type ListLivestockEventsForAssessmentRow struct {
+	ID            uuid.UUID
+	EntryID       uuid.UUID
+	EventType     string
+	QuantityDelta int32
+	OccurredAt    time.Time
+}
+
+func (q *Queries) ListLivestockEventsForAssessment(ctx context.Context, arg ListLivestockEventsForAssessmentParams) ([]ListLivestockEventsForAssessmentRow, error) {
+	rows, err := q.db.Query(ctx, listLivestockEventsForAssessment,
+		arg.TankID,
+		arg.Since,
+		arg.Until,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListLivestockEventsForAssessmentRow{}
+	for rows.Next() {
+		var i ListLivestockEventsForAssessmentRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.EntryID,
+			&i.EventType,
+			&i.QuantityDelta,
+			&i.OccurredAt,
 		); err != nil {
 			return nil, err
 		}

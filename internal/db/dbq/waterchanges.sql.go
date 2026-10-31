@@ -368,6 +368,60 @@ func (q *Queries) InsertWaterChangeOccurrence(ctx context.Context, arg InsertWat
 	return result.RowsAffected(), nil
 }
 
+const listCompletedWaterChangesForAssessment = `-- name: ListCompletedWaterChangesForAssessment :many
+SELECT id, completed_at::timestamptz AS completed_at, actual_volume_l, system_volume_l
+FROM water_change_events
+WHERE tank_id = $1 AND status = 'completed'
+  AND COALESCE(completed_at, scheduled_for) >= $2::timestamptz
+  AND COALESCE(completed_at, scheduled_for) <= $3::timestamptz
+ORDER BY COALESCE(completed_at, scheduled_for) DESC, id DESC
+LIMIT $4::int
+`
+
+type ListCompletedWaterChangesForAssessmentParams struct {
+	TankID   uuid.UUID
+	Since    time.Time
+	Until    time.Time
+	RowLimit int32
+}
+
+type ListCompletedWaterChangesForAssessmentRow struct {
+	ID            uuid.UUID
+	CompletedAt   time.Time
+	ActualVolumeL *decimal.Decimal
+	SystemVolumeL *decimal.Decimal
+}
+
+func (q *Queries) ListCompletedWaterChangesForAssessment(ctx context.Context, arg ListCompletedWaterChangesForAssessmentParams) ([]ListCompletedWaterChangesForAssessmentRow, error) {
+	rows, err := q.db.Query(ctx, listCompletedWaterChangesForAssessment,
+		arg.TankID,
+		arg.Since,
+		arg.Until,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCompletedWaterChangesForAssessmentRow{}
+	for rows.Next() {
+		var i ListCompletedWaterChangesForAssessmentRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CompletedAt,
+			&i.ActualVolumeL,
+			&i.SystemVolumeL,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listScheduledWaterChangeEvents = `-- name: ListScheduledWaterChangeEvents :many
 SELECT id, tank_id, schedule_id, scheduled_for, overdue_after, planned_volume_l, status, completed_at,
        actual_volume_l, system_volume_l, salt_mix, notes, skip_reason, resolved_at, created_at, updated_at, version

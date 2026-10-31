@@ -27,6 +27,13 @@ func InTx(ctx context.Context, db TxStarter, fn func(tx pgx.Tx) error) error {
 	return inTx(ctx, db, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}, fn)
 }
 
+// InReadSnapshotTx runs fn in a REPEATABLE READ, READ ONLY transaction: every statement sees
+// the same snapshot of the database, for reads that must be consistent with each other
+// (e.g. an assessment's input). It never writes and never takes row locks.
+func InReadSnapshotTx(ctx context.Context, db TxStarter, fn func(tx pgx.Tx) error) error {
+	return inTx(ctx, db, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, fn)
+}
+
 // SerializableAttempts bounds how often InSerializableTx runs fn.
 const SerializableAttempts = 3
 

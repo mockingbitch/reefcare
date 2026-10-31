@@ -72,7 +72,10 @@ Designer. Detailed, path-scoped rules live in `.claude/rules/` and load automati
   3.2/3.3 metrics and rules v1.0.0 are done (`internal/intelligence`: pure `Evaluate(Snapshot)`,
   11 rules incl. welfare bounds, evidence validation, golden fixtures in `testdata/`; update
   goldens with `go test ./internal/intelligence -run TestRulesOnFixtures -args -update` only
-  after checking the change). Next: 3.4 assessment service (load snapshot, persist, triggers).
+  after checking the change). 3.4 assessment service is done (`intelligence.Service`: snapshot
+  from `waterparameters.ForAssessment` + registered `intelligence.Source`s, persists immutable
+  assessments with evidence and knowledge refs, timeline `assessment.created`, manual POST and the
+  `intelligence.assess_after_test` job). Next: 3.5 history, feedback and web UI.
 - Unfinished work, known gaps and pending decisions are tracked in `docs/open-items.md`;
   update it when an item is completed or a new gap is found.
 - Go module path is `reefcare`. Migrations use sequential numbering (`make migration name=...`).

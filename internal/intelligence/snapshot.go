@@ -18,6 +18,30 @@ import (
 // SnapshotVersion is the version of the Snapshot layout stored with each assessment.
 const SnapshotVersion = 1
 
+// Row limits per kind of data in a snapshot (the newest rows of the window are kept).
+const (
+	LimitReadings         = 5000
+	LimitDosingEvents     = 5000
+	LimitWaterChanges     = 1000
+	LimitEquipmentChanges = 1000
+	LimitLivestockEvents  = 2000
+)
+
+// Reverse returns xs in reverse order (sources read newest first).
+func Reverse[T any](xs []T) []T {
+	for i, j := 0, len(xs)-1; i < j; i, j = i+1, j-1 {
+		xs[i], xs[j] = xs[j], xs[i]
+	}
+	return xs
+}
+
+// MarkTruncated records that a kind of data hit its limit.
+func (s *Snapshot) MarkTruncated(kind string, n, limit int) {
+	if n >= limit {
+		s.Truncated = append(s.Truncated, kind)
+	}
+}
+
 // Snapshot is everything the engine may look at for one tank. It is loaded only after the
 // caller was authorized to read the tank, and contains only that tank's data.
 type Snapshot struct {
@@ -29,6 +53,9 @@ type Snapshot struct {
 	Now       time.Time  `json:"now"`
 	// LivestockCount is the number of animals and corals present now (Σ current quantities).
 	LivestockCount int `json:"livestock_count"`
+	// Truncated names the kinds of data that hit their row limit: only the newest rows of
+	// the window are in the snapshot (reported by DQ-SNAPSHOT-LIMIT).
+	Truncated []string `json:"truncated,omitempty"`
 	// Readings are valid (not superseded) readings in canonical units, any order.
 	Readings []Reading `json:"readings"`
 	// Targets is the tank's target history.

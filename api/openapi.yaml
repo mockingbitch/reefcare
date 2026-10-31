@@ -36,6 +36,7 @@ tags:
   - name: water-parameters
   - name: notifications
   - name: knowledge
+  - name: intelligence
   - name: scheduling
 
 paths:
@@ -2365,6 +2366,73 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "422": { $ref: "#/components/responses/Unprocessable" }
 
+  /api/v1/tanks/{tankID}/assessments:
+    parameters: [{ $ref: "#/components/parameters/TankID" }]
+    get:
+      tags: [intelligence]
+      summary: The tank's assessments, newest first, without findings (owner or viewer)
+      parameters:
+        - { $ref: "#/components/parameters/Limit" }
+        - { $ref: "#/components/parameters/Cursor" }
+      responses:
+        "200":
+          description: A page of assessments.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Assessment" } }
+                  next_cursor: { type: [string, "null"] }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [intelligence]
+      summary: Run a provisional assessment now (owner; 20 per hour)
+      description: |
+        Deterministic rules over the tank's last 90 days (docs/knowledge-engine.md). The result is a
+        provisional assessment, never a diagnosis; it never acts on equipment or dosing. Every
+        observation cites stored facts (`evidence`), hypotheses list supporting and contradicting
+        facts, and cited knowledge is an exact published version. Thresholds are provisional
+        (`provisional: true`) until the domain reviewer confirms them. New water tests are also
+        assessed automatically (trigger `water_test`; one per tank per 10 minutes, ≤ 24 per day).
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      responses:
+        "201":
+          description: The assessment with its findings.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Assessment" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`tank_archived` or `snapshot_too_large`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/assessments/{assessmentID}:
+    parameters:
+      - name: assessmentID
+        in: path
+        required: true
+        description: A malformed ID is answered like an unknown one (404).
+        schema: { type: string, format: uuid }
+    get:
+      tags: [intelligence]
+      summary: One assessment with its findings (anyone who may read its tank)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Assessment" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
 security:
   - session: []
 
@@ -3561,3 +3629,109 @@ components:
               decision: { enum: [rejected, published] }
               note: { type: [string, "null"] }
               at: { type: string, format: date-time }
+    I18nText:
+      type: object
+      required: [key]
+      description: An i18n key with parameters; clients localize it (unknown keys render generically).
+      properties:
+        key: { type: string }
+        params: { type: object, additionalProperties: { type: string } }
+    EvidenceRef:
+      type: object
+      required: [kind, id]
+      properties:
+        kind: { enum: [reading, dosing_event, water_change, equipment_change, livestock_event] }
+        id: { type: string, format: uuid }
+    Hypothesis:
+      type: object
+      required: [key, text, claim_class, correlation, supporting, contradicting, missing]
+      properties:
+        key: { type: string }
+        text: { $ref: "#/components/schemas/I18nText" }
+        claim_class: { type: string, description: "Of the knowledge behind it; empty for rule-derived links." }
+        correlation: { type: boolean, description: A temporal coincidence, never a proven cause. }
+        supporting: { type: array, items: { $ref: "#/components/schemas/EvidenceRef" } }
+        contradicting: { type: array, items: { $ref: "#/components/schemas/EvidenceRef" } }
+        missing: { type: array, items: { $ref: "#/components/schemas/MissingItem" } }
+    MissingItem:
+      type: object
+      required: [text]
+      properties:
+        text: { $ref: "#/components/schemas/I18nText" }
+        parameter: { type: string }
+    Finding:
+      type: object
+      required: [rule_id, type, severity, summary, observations, hypotheses, alternative_explanations, missing_information,
+                 recommended_verifications, safety_warnings, knowledge_references, confidence_label]
+      properties:
+        rule_id: { type: string, example: NH-AMMONIA-NITRITE }
+        type: { enum: [data_quality, parameter_deviation, parameter_instability, dosing_mismatch, livestock_change, next_measurements] }
+        severity: { enum: [info, notice, warning, urgent] }
+        parameter: { type: string }
+        summary: { $ref: "#/components/schemas/I18nText" }
+        observations:
+          type: array
+          items:
+            type: object
+            required: [text, evidence]
+            properties:
+              text: { $ref: "#/components/schemas/I18nText" }
+              evidence: { type: array, minItems: 1, items: { $ref: "#/components/schemas/EvidenceRef" } }
+        hypotheses: { type: array, items: { $ref: "#/components/schemas/Hypothesis" } }
+        alternative_explanations:
+          type: array
+          description: From community or unverified knowledge, shown as "things others have reported".
+          items: { $ref: "#/components/schemas/Hypothesis" }
+        missing_information: { type: array, items: { $ref: "#/components/schemas/MissingItem" } }
+        recommended_verifications:
+          type: array
+          items:
+            type: object
+            required: [text]
+            properties:
+              text: { $ref: "#/components/schemas/I18nText" }
+              parameter: { type: string }
+        safety_warnings:
+          type: array
+          description: Always shown; urgent ones first. Never removed by later steps.
+          items:
+            type: object
+            required: [text, urgent]
+            properties:
+              text: { $ref: "#/components/schemas/I18nText" }
+              urgent: { type: boolean }
+        knowledge_references:
+          type: array
+          items:
+            type: object
+            required: [slug, version_id, title, locale]
+            properties:
+              slug: { type: string }
+              version_id: { type: string, format: uuid }
+              title: { type: string }
+              locale: { enum: [vi, en] }
+        confidence_label: { enum: [not_assessed, low, moderate, high] }
+    Assessment:
+      type: object
+      required: [id, tank_id, trigger, water_test_id, status, finding_count, max_severity, confidence_label, rule_version,
+                 provisional, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        tank_id: { type: string, format: uuid }
+        trigger: { enum: [manual, water_test, scheduled] }
+        water_test_id: { type: [string, "null"], format: uuid }
+        status: { enum: [generated, retracted] }
+        finding_count: { type: integer }
+        max_severity: { oneOf: [{ enum: [info, notice, warning, urgent] }, { type: "null" }] }
+        confidence_label:
+          description: "Lowest among assessed findings. Basis: low = one reading, a contradiction or a doubtful input; moderate = ≥ 2 fresh agreeing readings; high = moderate confirmed by a second known kit or method. Never a probability."
+          enum: [not_assessed, low, moderate, high]
+        rule_version: { type: string }
+        provisional: { type: boolean, description: Rule thresholds not yet confirmed by the domain reviewer. }
+        knowledge_version: { type: string }
+        input_snapshot_version: { type: integer }
+        locale: { enum: [vi, en] }
+        retracted_at: { type: string, format: date-time }
+        retract_reason: { type: string }
+        created_at: { type: string, format: date-time }
+        findings: { type: array, description: Only in single-assessment responses., items: { $ref: "#/components/schemas/Finding" } }

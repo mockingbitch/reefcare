@@ -197,3 +197,11 @@ DELETE FROM tanks WHERE owner_id = @owner_id;
 
 -- name: DeleteGranteeShares :exec
 DELETE FROM tank_shares WHERE user_id = @user_id;
+
+-- name: GetTankForAssessment :one
+SELECT tank_type, status, setup_date FROM tanks WHERE id = @id;
+
+-- name: LockTankForAssessment :one
+-- Taken before storing an automatic assessment: an archive or erasure of the tank waits, or
+-- is seen.
+SELECT status FROM tanks WHERE id = @id FOR SHARE;

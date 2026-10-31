@@ -151,6 +151,12 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 | IN2 | Unit context in ammonia findings | P3 | The verdict uses canonical NH3; add the entered value and unit to the observation |
 | IN3 | `found` events don't offset `missing` in LC-LOSSES | P3 | Minor; a later find is shown in the history |
 | IN4 | Dosing adherence linked to the plan's target parameter | P2 | Needs DS2 |
+| IN5 | Notifications for urgent assessments and daily staleness | P2 | docs §7 "daily staleness" and an urgent-finding reminder need a notifications category `assessment` (migration + source); not built (NT1) |
+| IN6 | Rate limit for manual assessments is per process | P3 | Same as S1 |
+| IN7 | Snapshot bounds | P3 | 90 days, ≤ 5000 readings, 5000 dosing events, 2000 livestock events; past a limit only the newest rows are kept and `DQ-SNAPSHOT-LIMIT` says so. Sensor imports will need per-parameter windows |
+| IN8 | Retention of automatic assessments | P3 | Each keeps a snapshot (≤ 3.5 MB); bounded to 24 per tank per day, but nothing is ever purged. Consider keeping only the latest automatic one per day after 90 days |
+| IN9 | Retraction endpoint | P2 | The schema and trigger allow a one-way retraction with a reason; the API comes with 3.5 |
+| IN10 | Frontend must render knowledge text in findings as untrusted | P1 for 3.5 | `knowledge.safety_warning` params and reference titles are editor-written: plain text only, links built from slugs |
 
 ## 4. Security and identity follow-ups
 

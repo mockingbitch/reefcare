@@ -277,6 +277,17 @@ recipient's zone; held reminders stay pending and go out with the next allowed e
 | POST | `/api/v1/assessments/{assessmentID}/feedback` | owner | |
 | GET | `/api/v1/knowledge/articles/{slug}` | auth | published versions only |
 
+Assessments as implemented (3.4): `POST /tanks/{id}/assessments` (owner, 20/h, synchronous —
+the deterministic pipeline is fast) → 201 with `findings`; `GET /tanks/{id}/assessments` (readers,
+keyset, without findings); `GET /assessments/{id}` (readers of its tank). New water tests are
+assessed by the job `intelligence.assess_after_test`: one job per tank per 10-minute bucket, run
+at its end on the latest state, at most 24 automatic assessments per tank per day. The snapshot
+keeps the newest rows when a kind of data hits its limit and says so (`DQ-SNAPSHOT-LIMIT`); a
+snapshot over 3.5 MB is refused (409 `snapshot_too_large`). Findings carry i18n
+`{key, params}` texts, evidence refs, hypotheses with supporting/contradicting facts, safety
+warnings (never removed) and exact knowledge versions; `provisional: true` while thresholds await
+D5. Assessments are immutable (trigger); only retraction (3.5) changes their status.
+
 Knowledge as implemented (3.1): readers use `GET /knowledge?locale&parameter&q` and
 `GET /knowledge/{slug}?locale` (published only; the other locale as fallback). Editors (role
 `administrator`, checked in the service; others 403) use `/admin/knowledge/…`: sources,

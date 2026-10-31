@@ -215,7 +215,8 @@ Thresholds are product decisions to be reviewed by a reef-domain reviewer before
 ## 7. Triggers
 
 - Manual (`POST /tanks/{id}/assessments`), rate limited.
-- After a water test (job `intelligence.assess_after_test`, dedupe per water test).
+- After a water test (job `intelligence.assess_after_test`; implemented as one job per tank per
+  10-minute bucket, run at the end of the bucket on the latest state, ≤ 24 per tank per day).
 - Daily staleness (`DQ-STALE` only, produces notification, not a full assessment).
 
 ## 8. LLM integration (later, optional)

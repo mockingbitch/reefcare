@@ -23,6 +23,7 @@ import (
 	"reefcare/internal/platform/database"
 	"reefcare/internal/platform/decimal"
 	"reefcare/internal/platform/idempotency"
+	"reefcare/internal/platform/jobs"
 	"reefcare/internal/platform/textcheck"
 	"reefcare/internal/tanks"
 	"reefcare/internal/timeline"
@@ -357,6 +358,17 @@ func (s *Service) Record(ctx context.Context, a tanks.Actor, tankID uuid.UUID, i
 			TankID: tankID, OccurredAt: at, Category: timeline.CategoryMeasurement, EventType: "measurement.recorded",
 			SourceType: "water_test", SourceID: id, ActorID: &a.UserID,
 			Summary: map[string]any{"parameters": codes},
+		})
+		if err != nil {
+			return err
+		}
+		// New tests are assessed in the background (internal/intelligence): one job per tank
+		// and AssessDebounce bucket, run at the end of the bucket on the latest state, so a
+		// burst of tests (or a script) gives one assessment, not one per test.
+		bucket := now.Truncate(AssessDebounce)
+		_, err = jobs.Enqueue(ctx, q, now, jobs.Spec{
+			Kind: JobAssessAfterTest, Payload: AssessAfterTest{TankID: tankID, WaterTestID: id, UserID: a.UserID},
+			DedupeKey: tankID.String() + ":" + bucket.UTC().Format(time.RFC3339), RunAt: bucket.Add(AssessDebounce), MaxAttempts: 3,
 		})
 		return err
 	})

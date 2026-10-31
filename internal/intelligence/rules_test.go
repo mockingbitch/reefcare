@@ -176,3 +176,12 @@ func TestValidationDropsUnsupportedClaims(t *testing.T) {
 		t.Errorf("overall confidence %q", res.Confidence)
 	}
 }
+
+func TestSnapshotLimitIsReported(t *testing.T) {
+	s := loadFixture(t, "stable")
+	s.Truncated = []string{"readings"}
+	res := Evaluate(s)
+	if len(res.Findings) != 1 || res.Findings[0].RuleID != "DQ-SNAPSHOT-LIMIT" || len(res.Findings[0].Missing) != 1 {
+		t.Fatalf("%+v", res.Findings)
+	}
+}

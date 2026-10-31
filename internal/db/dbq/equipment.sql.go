@@ -629,6 +629,67 @@ func (q *Queries) ListEquipment(ctx context.Context, arg ListEquipmentParams) ([
 	return items, nil
 }
 
+const listEquipmentChangesForAssessment = `-- name: ListEquipmentChangesForAssessment :many
+SELECT e.id, 'installed'::text AS kind, e.category, e.installed_at AS at
+FROM tank_equipment e
+WHERE e.tank_id = $2 AND e.installed_at >= $3::timestamptz AND e.installed_at <= $4::timestamptz
+UNION ALL
+SELECT e.id, 'removed'::text, e.category, e.removed_at::timestamptz
+FROM tank_equipment e
+WHERE e.tank_id = $2 AND e.removed_at >= $3::timestamptz AND e.removed_at <= $4::timestamptz
+UNION ALL
+SELECT c.id, 'configuration_changed'::text, e.category, c.effective_at
+FROM equipment_configurations c JOIN tank_equipment e ON e.id = c.equipment_id
+WHERE c.tank_id = $2 AND c.effective_at >= $3::timestamptz AND c.effective_at <= $4::timestamptz
+ORDER BY 4 DESC, 1 DESC
+LIMIT $1::int
+`
+
+type ListEquipmentChangesForAssessmentParams struct {
+	RowLimit int32
+	TankID   uuid.UUID
+	Since    time.Time
+	Until    time.Time
+}
+
+type ListEquipmentChangesForAssessmentRow struct {
+	ID       uuid.UUID
+	Kind     string
+	Category string
+	At       time.Time
+}
+
+// Assessment snapshot: devices installed or removed and configuration versions since @since.
+func (q *Queries) ListEquipmentChangesForAssessment(ctx context.Context, arg ListEquipmentChangesForAssessmentParams) ([]ListEquipmentChangesForAssessmentRow, error) {
+	rows, err := q.db.Query(ctx, listEquipmentChangesForAssessment,
+		arg.RowLimit,
+		arg.TankID,
+		arg.Since,
+		arg.Until,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListEquipmentChangesForAssessmentRow{}
+	for rows.Next() {
+		var i ListEquipmentChangesForAssessmentRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.Category,
+			&i.At,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMaintenanceEvents = `-- name: ListMaintenanceEvents :many
 SELECT id, tank_id, plan_id, equipment_id, title, performed_at, notes, created_at
 FROM maintenance_events

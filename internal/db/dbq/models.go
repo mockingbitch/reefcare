@@ -13,6 +13,39 @@ import (
 	"reefcare/internal/platform/decimal"
 )
 
+type Assessment struct {
+	ID               uuid.UUID
+	TankID           uuid.UUID
+	Trigger          string
+	SourceID         *uuid.UUID
+	Status           string
+	Result           json.RawMessage
+	FindingCount     int32
+	MaxSeverity      *string
+	ConfidenceLabel  string
+	InputSnapshot    json.RawMessage
+	SnapshotVersion  int32
+	RuleVersion      string
+	KnowledgeVersion string
+	Provisional      bool
+	Locale           string
+	RequestedBy      *uuid.UUID
+	RetractedAt      *time.Time
+	RetractReason    *string
+	CreatedAt        time.Time
+}
+
+type AssessmentEvidence struct {
+	AssessmentID uuid.UUID
+	Kind         string
+	RefID        uuid.UUID
+}
+
+type AssessmentKnowledgeRef struct {
+	AssessmentID uuid.UUID
+	VersionID    uuid.UUID
+}
+
 type AuditLog struct {
 	ID         int64
 	ActorID    *uuid.UUID

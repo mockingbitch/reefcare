@@ -331,6 +331,23 @@ func (q *Queries) GetTankAccessForWrite(ctx context.Context, arg GetTankAccessFo
 	return i, err
 }
 
+const getTankForAssessment = `-- name: GetTankForAssessment :one
+SELECT tank_type, status, setup_date FROM tanks WHERE id = $1
+`
+
+type GetTankForAssessmentRow struct {
+	TankType  string
+	Status    string
+	SetupDate *time.Time
+}
+
+func (q *Queries) GetTankForAssessment(ctx context.Context, id uuid.UUID) (GetTankForAssessmentRow, error) {
+	row := q.db.QueryRow(ctx, getTankForAssessment, id)
+	var i GetTankForAssessmentRow
+	err := row.Scan(&i.TankType, &i.Status, &i.SetupDate)
+	return i, err
+}
+
 const insertTankEvent = `-- name: InsertTankEvent :execrows
 INSERT INTO tank_events (tank_id, occurred_at, category, event_type, source_type, source_id, actor_id, summary, created_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7,
@@ -689,6 +706,19 @@ func (q *Queries) ListTanksForUser(ctx context.Context, arg ListTanksForUserPara
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockTankForAssessment = `-- name: LockTankForAssessment :one
+SELECT status FROM tanks WHERE id = $1 FOR SHARE
+`
+
+// Taken before storing an automatic assessment: an archive or erasure of the tank waits, or
+// is seen.
+func (q *Queries) LockTankForAssessment(ctx context.Context, id uuid.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, lockTankForAssessment, id)
+	var status string
+	err := row.Scan(&status)
+	return status, err
 }
 
 const lockTankRow = `-- name: LockTankRow :exec

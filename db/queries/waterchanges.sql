@@ -201,3 +201,12 @@ WHERE e.status = 'scheduled' AND t.status <> 'archived'
   AND (e.overdue_after, e.id) > (sqlc.arg(after_at)::timestamptz, sqlc.arg(after_id)::uuid)
 ORDER BY e.overdue_after, e.id
 LIMIT @batch;
+
+-- name: ListCompletedWaterChangesForAssessment :many
+SELECT id, completed_at::timestamptz AS completed_at, actual_volume_l, system_volume_l
+FROM water_change_events
+WHERE tank_id = @tank_id AND status = 'completed'
+  AND COALESCE(completed_at, scheduled_for) >= sqlc.arg(since)::timestamptz
+  AND COALESCE(completed_at, scheduled_for) <= sqlc.arg(until)::timestamptz
+ORDER BY COALESCE(completed_at, scheduled_for) DESC, id DESC
+LIMIT sqlc.arg(row_limit)::int;

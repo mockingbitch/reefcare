@@ -187,3 +187,19 @@ WHERE p.active AND t.status <> 'archived'
   AND (p.next_due_on, p.id) > (sqlc.arg(after_on)::date, sqlc.arg(after_id)::uuid)
 ORDER BY p.next_due_on, p.id
 LIMIT @batch;
+
+-- name: ListEquipmentChangesForAssessment :many
+-- Assessment snapshot: devices installed or removed and configuration versions since @since.
+SELECT e.id, 'installed'::text AS kind, e.category, e.installed_at AS at
+FROM tank_equipment e
+WHERE e.tank_id = @tank_id AND e.installed_at >= sqlc.arg(since)::timestamptz AND e.installed_at <= sqlc.arg(until)::timestamptz
+UNION ALL
+SELECT e.id, 'removed'::text, e.category, e.removed_at::timestamptz
+FROM tank_equipment e
+WHERE e.tank_id = @tank_id AND e.removed_at >= sqlc.arg(since)::timestamptz AND e.removed_at <= sqlc.arg(until)::timestamptz
+UNION ALL
+SELECT c.id, 'configuration_changed'::text, e.category, c.effective_at
+FROM equipment_configurations c JOIN tank_equipment e ON e.id = c.equipment_id
+WHERE c.tank_id = @tank_id AND c.effective_at >= sqlc.arg(since)::timestamptz AND c.effective_at <= sqlc.arg(until)::timestamptz
+ORDER BY 4 DESC, 1 DESC
+LIMIT sqlc.arg(row_limit)::int;

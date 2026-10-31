@@ -20,6 +20,7 @@ import (
 	"reefcare/internal/dosing"
 	"reefcare/internal/equipment"
 	"reefcare/internal/identity"
+	"reefcare/internal/intelligence"
 	"reefcare/internal/knowledge"
 	"reefcare/internal/livestock"
 	"reefcare/internal/notifications"
@@ -175,6 +176,7 @@ func New(d Deps) App {
 	idSvc.OnErase(livestock.EraseUserData)
 	idSvc.OnErase(waterparameters.EraseUserData)
 	idSvc.OnErase(notifications.EraseUserData)
+	idSvc.OnErase(intelligence.EraseUserData)
 	idSvc.OnErase(tanks.EraseUserData)
 	idSvc.RegisterJobs(runner)
 	idHTTP := identity.NewHandler(idSvc, d.Log, d.Config.SecureCookies())
@@ -198,6 +200,13 @@ func New(d Deps) App {
 	notifySvc.AddSource(equipment.Reminders)
 	notifySvc.RegisterJobs(runner)
 	notifyHTTP := notifications.NewHandler(notifySvc, idHTTP.RequireAuth, d.Log)
+	intelSvc := intelligence.NewService(d.Pool, d.Clock, d.Log)
+	intelSvc.AddSource(dosing.ForAssessment)
+	intelSvc.AddSource(waterchanges.ForAssessment)
+	intelSvc.AddSource(equipment.ForAssessment)
+	intelSvc.AddSource(livestock.ForAssessment)
+	intelSvc.RegisterJobs(runner)
+	intelHTTP := intelligence.NewHandler(intelSvc, idHTTP.RequireAuth, d.Log)
 	kbHTTP := knowledge.NewHandler(knowledge.NewService(d.Pool, d.Clock, d.Log), idHTTP.RequireAuth, d.Log)
 	schedHTTP := scheduling.NewHandler(d.Clock, idHTTP.RequireAuth, d.Log)
 
@@ -213,7 +222,7 @@ func New(d Deps) App {
 		Mount: func(api chi.Router) {
 			api.Use(idHTTP.Authenticate)
 			idHTTP.Mount(api)
-			tankHTTP.Mount(api, wcHTTP.MountTank, doseHTTP.MountTank, eqHTTP.MountTank, lsHTTP.MountTank, wpHTTP.MountTank)
+			tankHTTP.Mount(api, wcHTTP.MountTank, doseHTTP.MountTank, eqHTTP.MountTank, lsHTTP.MountTank, wpHTTP.MountTank, intelHTTP.MountTank)
 			wcHTTP.Mount(api)
 			doseHTTP.Mount(api)
 			eqHTTP.Mount(api)
@@ -221,6 +230,7 @@ func New(d Deps) App {
 			wpHTTP.Mount(api)
 			notifyHTTP.Mount(api)
 			kbHTTP.Mount(api)
+			intelHTTP.Mount(api)
 			schedHTTP.Mount(api)
 		},
 	})

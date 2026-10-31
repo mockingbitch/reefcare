@@ -108,7 +108,7 @@ func reefType(s Snapshot) bool { return s.TankType != "fish_only" && s.TankType 
 
 // coreParameters are the parameters every keeper of this tank type is expected to test
 // ("custom" tanks are treated as reef tanks).
-func coreParameters(c *context) []string {
+func coreParameters(c *evalCtx) []string {
 	s := c.s
 	core := []string{"salinity", "temperature", "nitrate", "phosphate"}
 	if reefType(s) {
@@ -149,8 +149,8 @@ func correctionWarning(param string) SafetyWarning {
 	return SafetyWarning{Text: t("safety.no_fast_corrections", "parameter", param)}
 }
 
-// context precomputes what several rules share.
-type context struct {
+// evalCtx precomputes what several rules share.
+type evalCtx struct {
 	s          Snapshot
 	metrics    map[string]ParameterMetrics
 	suspect    map[string]bool // latest reading changed unusually fast: confirm first
@@ -158,8 +158,8 @@ type context struct {
 	waterAlarm bool            // a welfare or ammonia/nitrite finding fired
 }
 
-func newContext(s Snapshot) *context {
-	c := &context{s: s, metrics: map[string]ParameterMetrics{}, suspect: map[string]bool{}, conflicts: map[string]bool{}}
+func newContext(s Snapshot) *evalCtx {
+	c := &evalCtx{s: s, metrics: map[string]ParameterMetrics{}, suspect: map[string]bool{}, conflicts: map[string]bool{}}
 	for _, m := range AllMetrics(s) {
 		c.metrics[m.Parameter] = m
 	}
@@ -168,17 +168,18 @@ func newContext(s Snapshot) *context {
 
 // doubtful reports a parameter whose latest readings changed unusually fast or disagree:
 // instability rules wait for a re-test, and other findings about it have low confidence.
-func (c *context) doubtful(param string) bool { return c.suspect[param] || c.conflicts[param] }
+func (c *evalCtx) doubtful(param string) bool { return c.suspect[param] || c.conflicts[param] }
 
 // rule is one versioned rule.
 type rule struct {
 	id   string
-	eval func(*context) []Finding
+	eval func(*evalCtx) []Finding
 }
 
 // rules run in this order: data quality first (later rules read its flags), welfare before
 // losses (losses escalate when water quality is also alarming).
 var rules = []rule{
+	{"DQ-SNAPSHOT-LIMIT", ruleSnapshotLimit},
 	{"DQ-FAST-CHANGE", ruleFastChange},
 	{"DQ-CONFLICT", ruleConflict},
 	{"DQ-STALE", ruleStale},
@@ -216,7 +217,23 @@ func Evaluate(s Snapshot) Result {
 
 // --- data quality ---
 
-func ruleFastChange(c *context) []Finding {
+// ruleSnapshotLimit says when only the newest part of the window could be loaded, so older
+// history the rules might use is missing.
+func ruleSnapshotLimit(c *evalCtx) []Finding {
+	if len(c.s.Truncated) == 0 {
+		return nil
+	}
+	f := Finding{
+		Type: "data_quality", Severity: SeverityInfo,
+		Summary: t("dq.snapshot_limit.summary"), Confidence: ConfidenceNotAssessed,
+	}
+	for _, kind := range c.s.Truncated {
+		f.Missing = append(f.Missing, MissingItem{Text: t("dq.snapshot_limit.kind", "kind", kind)})
+	}
+	return []Finding{f}
+}
+
+func ruleFastChange(c *evalCtx) []Finding {
 	var out []Finding
 	for _, param := range sortedKeys(fastChangePerDay) {
 		m := c.metrics[param]
@@ -253,7 +270,7 @@ func ruleFastChange(c *context) []Finding {
 	return out
 }
 
-func ruleConflict(c *context) []Finding {
+func ruleConflict(c *evalCtx) []Finding {
 	var out []Finding
 	for _, param := range sortedKeys(tolerances) {
 		rs := byTime(c.s, param)
@@ -283,7 +300,7 @@ func ruleConflict(c *context) []Finding {
 	return out
 }
 
-func ruleStale(c *context) []Finding {
+func ruleStale(c *evalCtx) []Finding {
 	var missing []MissingItem
 	for _, param := range coreParameters(c) {
 		m := c.metrics[param]
@@ -307,7 +324,7 @@ func ruleStale(c *context) []Finding {
 
 // --- welfare and deviations ---
 
-func ruleWelfareBounds(c *context) []Finding {
+func ruleWelfareBounds(c *evalCtx) []Finding {
 	var out []Finding
 	for _, b := range welfareBounds {
 		m := c.metrics[b.param]
@@ -352,7 +369,7 @@ func ruleWelfareBounds(c *context) []Finding {
 	return out
 }
 
-func ruleAmmoniaNitrite(c *context) []Finding {
+func ruleAmmoniaNitrite(c *evalCtx) []Finding {
 	if c.s.TankStatus == "archived" {
 		return nil
 	}
@@ -400,7 +417,7 @@ func ruleAmmoniaNitrite(c *context) []Finding {
 	return out
 }
 
-func ruleOutOfTarget(c *context) []Finding {
+func ruleOutOfTarget(c *evalCtx) []Finding {
 	var out []Finding
 	for _, m := range AllMetrics(c.s) {
 		if m.Latest == nil || !m.Fresh || m.TargetStatus == "" || m.TargetStatus == "within" {
@@ -513,7 +530,7 @@ func agreeing(param string, rs []Reading) []Reading {
 	return out
 }
 
-func ruleAlkSwing(c *context) []Finding {
+func ruleAlkSwing(c *evalCtx) []Finding {
 	m := c.metrics["alkalinity"]
 	if c.doubtful("alkalinity") {
 		return nil
@@ -594,7 +611,7 @@ func ruleAlkSwing(c *context) []Finding {
 	return []Finding{f}
 }
 
-func ruleTrend(c *context) []Finding {
+func ruleTrend(c *evalCtx) []Finding {
 	var out []Finding
 	for _, m := range AllMetrics(c.s) {
 		if m.Latest == nil || !m.Fresh || m.TargetStatus != "within" || c.doubtful(m.Parameter) {
@@ -655,7 +672,7 @@ func missedDoses(s Snapshot, window time.Duration) []EvidenceRef {
 // ruleAdherence reports incomplete dosing records. Docs §5 also want "the plan's target
 // parameter trending away"; plans have no target parameter yet (open item DS2), so the rule
 // reports the records alone, as a records finding.
-func ruleAdherence(c *context) []Finding {
+func ruleAdherence(c *evalCtx) []Finding {
 	a := AdherenceFor(c.s, 7*day)
 	miss := missedDoses(c.s, 7*day)
 	if a.Ratio == nil || a.Due-a.Open < minAdherenceDue || a.Ratio.Cmp(minAdherence) >= 0 || len(miss) == 0 {
@@ -675,7 +692,7 @@ func ruleAdherence(c *context) []Finding {
 	}}
 }
 
-func ruleLosses(c *context) []Finding {
+func ruleLosses(c *evalCtx) []Finding {
 	l := LivestockFor(c.s, 7*day)
 	type change struct {
 		ref EvidenceRef
@@ -740,7 +757,7 @@ func ruleLosses(c *context) []Finding {
 	return []Finding{f}
 }
 
-func ruleNextMeasurements(c *context) []Finding {
+func ruleNextMeasurements(c *evalCtx) []Finding {
 	var vs []Verification
 	for _, param := range coreParameters(c) {
 		m := c.metrics[param]
@@ -763,7 +780,7 @@ func ruleNextMeasurements(c *context) []Finding {
 // moderate — ≥ 2 supporting readings, all fresh, none contradicting;
 // high — moderate and confirmed by a second known method or kit (readings converted with an
 // assumption, e.g. from SG, never count as confirmation).
-func confidence(c *context, param string, support []*Reading, contra ...*Reading) string {
+func confidence(c *evalCtx, param string, support []*Reading, contra ...*Reading) string {
 	m := c.metrics[param]
 	if len(support) == 0 {
 		return ConfidenceNotAssessed

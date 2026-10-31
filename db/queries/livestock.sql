@@ -142,3 +142,13 @@ WHERE species_id IN (SELECT id FROM species WHERE owner_id = @owner_id);
 
 -- name: DeleteOwnerSpecies :exec
 DELETE FROM species WHERE owner_id = @owner_id;
+
+-- name: ListLivestockEventsForAssessment :many
+SELECT id, entry_id, event_type, quantity_delta, occurred_at
+FROM livestock_events
+WHERE tank_id = @tank_id AND occurred_at >= sqlc.arg(since)::timestamptz AND occurred_at <= sqlc.arg(until)::timestamptz
+ORDER BY occurred_at DESC, id DESC
+LIMIT sqlc.arg(row_limit)::int;
+
+-- name: CountLivestockPresent :one
+SELECT COALESCE(sum(current_quantity), 0)::integer FROM livestock_entries WHERE tank_id = @tank_id;

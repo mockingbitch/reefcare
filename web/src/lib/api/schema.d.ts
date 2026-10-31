@@ -4827,6 +4827,149 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tanks/{tankID}/assessments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                tankID: components["parameters"]["TankID"];
+            };
+            cookie?: never;
+        };
+        /** The tank's assessments, newest first, without findings (owner or viewer) */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: components["parameters"]["Limit"];
+                    /** @description Opaque `next_cursor` from the previous page. */
+                    cursor?: components["parameters"]["Cursor"];
+                };
+                header?: never;
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    tankID: components["parameters"]["TankID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A page of assessments. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: components["schemas"]["Assessment"][];
+                            next_cursor: string | null;
+                        };
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        /**
+         * Run a provisional assessment now (owner; 20 per hour)
+         * @description Deterministic rules over the tank's last 90 days (docs/knowledge-engine.md). The result is a
+         *     provisional assessment, never a diagnosis; it never acts on equipment or dosing. Every
+         *     observation cites stored facts (`evidence`), hypotheses list supporting and contradicting
+         *     facts, and cited knowledge is an exact published version. Thresholds are provisional
+         *     (`provisional: true`) until the domain reviewer confirms them. New water tests are also
+         *     assessed automatically (trigger `water_test`; one per tank per 10 minutes, ≤ 24 per day).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    tankID: components["parameters"]["TankID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The assessment with its findings. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Assessment"];
+                    };
+                };
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `tank_archived` or `snapshot_too_large` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                429: components["responses"]["RateLimited"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assessments/{assessmentID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A malformed ID is answered like an unknown one (404). */
+                assessmentID: string;
+            };
+            cookie?: never;
+        };
+        /** One assessment with its findings (anyone who may read its tank) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description A malformed ID is answered like an unknown one (404). */
+                    assessmentID: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Assessment"];
+                    };
+                };
+                401: components["responses"]["Unauthenticated"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -5944,6 +6087,104 @@ export interface components {
                 /** Format: date-time */
                 at: string;
             }[];
+        };
+        /** @description An i18n key with parameters; clients localize it (unknown keys render generically). */
+        I18nText: {
+            key: string;
+            params?: {
+                [key: string]: string;
+            };
+        };
+        EvidenceRef: {
+            /** @enum {unknown} */
+            kind: "reading" | "dosing_event" | "water_change" | "equipment_change" | "livestock_event";
+            /** Format: uuid */
+            id: string;
+        };
+        Hypothesis: {
+            key: string;
+            text: components["schemas"]["I18nText"];
+            /** @description Of the knowledge behind it; empty for rule-derived links. */
+            claim_class: string;
+            /** @description A temporal coincidence */
+            correlation: boolean;
+            supporting: components["schemas"]["EvidenceRef"][];
+            contradicting: components["schemas"]["EvidenceRef"][];
+            missing: components["schemas"]["MissingItem"][];
+        };
+        MissingItem: {
+            text: components["schemas"]["I18nText"];
+            parameter?: string;
+        };
+        Finding: {
+            /** @example NH-AMMONIA-NITRITE */
+            rule_id: string;
+            /** @enum {unknown} */
+            type: "data_quality" | "parameter_deviation" | "parameter_instability" | "dosing_mismatch" | "livestock_change" | "next_measurements";
+            /** @enum {unknown} */
+            severity: "info" | "notice" | "warning" | "urgent";
+            parameter?: string;
+            summary: components["schemas"]["I18nText"];
+            observations: {
+                text: components["schemas"]["I18nText"];
+                evidence: components["schemas"]["EvidenceRef"][];
+            }[];
+            hypotheses: components["schemas"]["Hypothesis"][];
+            /** @description From community or unverified knowledge, shown as "things others have reported". */
+            alternative_explanations: components["schemas"]["Hypothesis"][];
+            missing_information: components["schemas"]["MissingItem"][];
+            recommended_verifications: {
+                text: components["schemas"]["I18nText"];
+                parameter?: string;
+            }[];
+            /** @description Always shown; urgent ones first. Never removed by later steps. */
+            safety_warnings: {
+                text: components["schemas"]["I18nText"];
+                urgent: boolean;
+            }[];
+            knowledge_references: {
+                slug: string;
+                /** Format: uuid */
+                version_id: string;
+                title: string;
+                /** @enum {unknown} */
+                locale: "vi" | "en";
+            }[];
+            /** @enum {unknown} */
+            confidence_label: "not_assessed" | "low" | "moderate" | "high";
+        };
+        Assessment: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tank_id: string;
+            /** @enum {unknown} */
+            trigger: "manual" | "water_test" | "scheduled";
+            /** Format: uuid */
+            water_test_id: string | null;
+            /** @enum {unknown} */
+            status: "generated" | "retracted";
+            finding_count: number;
+            max_severity: ("info" | "notice" | "warning" | "urgent") | null;
+            /**
+             * @description Lowest among assessed findings. Basis: low = one reading, a contradiction or a doubtful input; moderate = ≥ 2 fresh agreeing readings; high = moderate confirmed by a second known kit or method. Never a probability.
+             * @enum {unknown}
+             */
+            confidence_label: "not_assessed" | "low" | "moderate" | "high";
+            rule_version: string;
+            /** @description Rule thresholds not yet confirmed by the domain reviewer. */
+            provisional: boolean;
+            knowledge_version?: string;
+            input_snapshot_version?: number;
+            /** @enum {unknown} */
+            locale?: "vi" | "en";
+            /** Format: date-time */
+            retracted_at?: string;
+            retract_reason?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** @description Only in single-assessment responses. */
+            findings?: components["schemas"]["Finding"][];
         };
     };
     responses: {

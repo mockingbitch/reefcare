@@ -308,6 +308,67 @@ func (q *Queries) ListParameterTypes(ctx context.Context) ([]ParameterType, erro
 	return items, nil
 }
 
+const listReadingsForAssessment = `-- name: ListReadingsForAssessment :many
+SELECT id, parameter, measured_at, canonical_value, estimate, method, test_kit
+FROM water_test_readings
+WHERE tank_id = $1 AND status = 'valid'
+  AND measured_at >= $2::timestamptz AND measured_at <= $3::timestamptz
+ORDER BY measured_at DESC, id DESC
+LIMIT $4::int
+`
+
+type ListReadingsForAssessmentParams struct {
+	TankID   uuid.UUID
+	Since    time.Time
+	Until    time.Time
+	RowLimit int32
+}
+
+type ListReadingsForAssessmentRow struct {
+	ID             uuid.UUID
+	Parameter      string
+	MeasuredAt     time.Time
+	CanonicalValue decimal.Decimal
+	Estimate       bool
+	Method         *string
+	TestKit        *string
+}
+
+// Assessment snapshot: the newest valid readings in [since, until] (readings_recent), newest
+// first; the caller reverses them and reports a full page as truncated.
+func (q *Queries) ListReadingsForAssessment(ctx context.Context, arg ListReadingsForAssessmentParams) ([]ListReadingsForAssessmentRow, error) {
+	rows, err := q.db.Query(ctx, listReadingsForAssessment,
+		arg.TankID,
+		arg.Since,
+		arg.Until,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListReadingsForAssessmentRow{}
+	for rows.Next() {
+		var i ListReadingsForAssessmentRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Parameter,
+			&i.MeasuredAt,
+			&i.CanonicalValue,
+			&i.Estimate,
+			&i.Method,
+			&i.TestKit,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listReadingsForTests = `-- name: ListReadingsForTests :many
 SELECT id, water_test_id, parameter, measured_at, input_value, input_unit, canonical_value, estimate, method,
        test_kit, status, supersedes_id, correction_reason, created_at
