@@ -277,6 +277,19 @@ recipient's zone; held reminders stay pending and go out with the next allowed e
 | POST | `/api/v1/assessments/{assessmentID}/feedback` | owner | |
 | GET | `/api/v1/knowledge/articles/{slug}` | auth | published versions only |
 
+Knowledge as implemented (3.1): readers use `GET /knowledge?locale&parameter&q` and
+`GET /knowledge/{slug}?locale` (published only; the other locale as fallback). Editors (role
+`administrator`, checked in the service; others 403) use `/admin/knowledge/…`: sources,
+articles (create, retire), versions (draft create/edit with `revision`, `submit`, `publish`,
+`reject` with a required note). Only the author edits and submits a draft (403 `not_author`);
+another editor's changes go into a new version they author. Publishing needs an editor other
+than the author (409 `own_review`), refuses versions whose author was erased (`author_unknown`)
+and older versions over a newer live one (`newer_version_live`); `established` content needs a
+source at submit (422 `source_required`) and no recommendation may claim more than its version
+(`stronger_than_version`). Content is frozen once
+submitted (DB trigger): changes are new versions. Publish, reject and retire are audited. Roles
+are granted on the command line only: `api roles grant|revoke <email> <role>` (audited).
+
 ### Community and reputation (Phase 4, contracts to be detailed before implementation)
 `/posts`, `/posts/{id}/comments`, `/votes`, `/posts/{id}/accept`, `/posts/{id}/status`,
 `/posts/{id}/updates`, `/media/uploads` (presigned), `/reports`,

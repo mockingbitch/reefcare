@@ -131,6 +131,18 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 | NT8 | First deploy sends one backlog email | P3 | `email_reminders` was settable before delivery existed; the first scan emails up to 7 days of overdue items once (counts only). Accepted: no production users yet |
 | NT9 | One-click unsubscribe | P2 | With NT4: `List-Unsubscribe` + signed token turning `email_reminders` off without login |
 
+## 3g. Knowledge base (milestone 3.1 done)
+
+| # | Item | Priority | Notes |
+|---|---|---|---|
+| KB1 | Seed content | P1 for Phase 3 release | Empty until the D5 reviewer writes or approves articles with real sources; nothing is generated. Rules work without knowledge refs |
+| KB2 | Markdown rendering | P3 | Bodies are shown as plain text (`white-space: pre-wrap`); rendering Markdown needs a sanitizer and a review |
+| KB3 | "Verified specialist" reviewers | P3 | Only `administrator` edits and reviews; a separate specialist role (docs/knowledge-engine.md §2) is not built |
+| KB4 | Accent-insensitive knowledge search | P3 | Same as LS4 |
+| KB5 | Editor lists are capped without a cursor | P3 | Sources 1000, articles 2000, published list 500 (sorted by title); fine for a curated KB, add keyset pagination if it grows |
+| KB6 | Revoking the last administrator | P3 | The CLI allows it; recovery is another `roles grant` |
+| KB7 | Abandoned drafts are never deleted | P3 | Versions are referenced by history; add an explicit "discard draft" if clutter grows |
+
 ## 4. Security and identity follow-ups
 
 | # | Item | Priority | Source | Notes |

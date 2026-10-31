@@ -27,7 +27,10 @@ Design constraints:
   `unverified` (hypothesis). Rules may only produce *recommendations* from `established` or
   `expert` items; `community`/`unverified` may appear only as labeled alternative explanations.
 - Review workflow: `draft → in_review → published → retired`. Publishing requires a reviewer
-  (admin or verified specialist) different from the author. Community anecdotes are never
+  (admin or verified specialist) different from the author. Only the author edits and submits
+  a draft, so the reviewer can never publish words they wrote (implemented in 3.1; the
+  database trigger enforces the transitions and freezes content, author and review record).
+  A recommendation never claims a stronger class than its version. Community anecdotes are never
   auto-promoted.
 - Locales: each version has a `locale`; `vi` and `en` versions of the same article share the slug.
 - `knowledge_version` (string) = hash of the set of published version ids used by the rule set at

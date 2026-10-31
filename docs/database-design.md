@@ -480,11 +480,21 @@ CREATE INDEX ON notifications (user_id, created_at DESC) WHERE read_at IS NULL;
 
 ## 5. Phase 3 — knowledge and intelligence (summary)
 
+Knowledge implemented in `db/migrations/00013_knowledge.sql` (milestone 3.1): versions are per
+locale with `UNIQUE (article_id, locale, version_no)`, one published version per article and
+locale (partial unique index), `structured jsonb` (verifications, recommendations with claim
+class, contraindications, safety_warnings), `author_id`/`reviewed_by` with a four-eyes CHECK, a
+trigger enforcing the workflow (created as draft; draft → in_review → published | draft;
+published → retired), freezing content, sources and the author once submitted and the review
+record once published; an append-only `knowledge_version_reviews` history; `knowledge_articles.retired_at` withdraws an article. No `current_version_id`
+(the published row is found by status).
+
 | Table | Key columns / constraints |
 |---|---|
-| `knowledge_articles` | `id uuid`, `slug text UNIQUE`, `category`, `current_version_id`, `status` (`draft`,`published`,`retired`) |
-| `knowledge_article_versions` | `article_id`, `version_no` (UNIQUE per article), `title`, `body_md`, `facts jsonb`, `conditions jsonb`, `parameters text[]`, `symptoms text[]`, `claim_class` (`established`,`expert`,`community`,`unverified`), `review_status`, `reviewed_by`, `reviewed_at`, `locale` |
-| `knowledge_sources` | `title`, `publisher`, `url`, `published_on`, `accessed_on`; link table `knowledge_version_sources` |
+| `knowledge_articles` | `id uuid`, `slug text UNIQUE` (immutable), `category`, `retired_at` |
+| `knowledge_article_versions` | `article_id`, `locale`, `version_no` (UNIQUE per article and locale), `title`, `summary`, `body_md`, `claim_class` (`established`,`expert`,`community`,`unverified`), `parameters text[]`, `symptoms text[]`, `structured jsonb`, `status` (`draft`,`in_review`,`published`,`retired`), `author_id`, `submitted_at`, `reviewed_by`, `reviewed_at`, `review_note`, `published_at`, `retired_at`; workflow trigger |
+| `knowledge_version_reviews` | append-only review history: `version_id`, `reviewer_id`, `decision` (`rejected`,`published`), `note` |
+| `knowledge_sources` | `title`, `publisher`, `url` (https), `published_on`, `accessed_on` (immutable); link table `knowledge_version_sources` (frozen after submit) |
 | `assessments` | `id`, `tank_id`, `assessment_type`, `status` (`generated`,`superseded`,`retracted`), `summary jsonb` (i18n), `result jsonb` (typed model, validated), `confidence_label`, `input_snapshot jsonb`, `input_snapshot_version int`, `rule_version text`, `knowledge_version text`, `trigger` (`manual`,`water_test`,`scheduled`), `created_at` |
 | `assessment_evidence` | `assessment_id`, `kind` (`reading`,`dosing_event`,`water_change`,`equipment_change`,`livestock_event`,`knowledge`), `ref_id uuid`, `role` (`supports`,`contradicts`,`missing`), `hypothesis_key` |
 | `assessment_knowledge_refs` | `(assessment_id, knowledge_version_id)` PK, FK RESTRICT |

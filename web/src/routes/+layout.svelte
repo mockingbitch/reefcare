@@ -102,6 +102,12 @@
 					</li>
 					<li>
 						<a
+							href={resolve('/(app)/knowledge')}
+							aria-current={current(resolve('/(app)/knowledge'))}>{m.nav_knowledge()}</a
+						>
+					</li>
+					<li>
+						<a
 							href={resolve('/(app)/settings/profile')}
 							aria-current={current(resolve('/(app)/settings/profile'))}>{m.nav_profile()}</a
 						>

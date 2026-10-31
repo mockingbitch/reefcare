@@ -58,6 +58,22 @@ export function errorMessage(e: ApiError): string {
 			return m.err_idempotency_key_reused();
 		case 'already_verified':
 			return m.err_already_verified();
+		case 'slug_taken':
+			return m.err_slug_taken();
+		case 'not_draft':
+			return m.err_not_draft();
+		case 'not_in_review':
+			return m.err_not_in_review();
+		case 'own_review':
+			return m.err_own_review();
+		case 'article_retired':
+			return m.err_article_retired();
+		case 'not_author':
+			return m.err_not_author();
+		case 'author_unknown':
+			return m.err_author_unknown();
+		case 'newer_version_live':
+			return m.err_newer_version_live();
 		case 'validation_failed':
 		case 'malformed_json':
 		case 'unknown_field':
@@ -137,6 +153,24 @@ export function fieldMessage(d: ErrorDetail): string {
 			return m.f_outside_range();
 		case 'before_start':
 			return m.f_before_start();
+		case 'source_required':
+			return m.f_source_required();
+		case 'https_only':
+			return m.f_https_only();
+		case 'url_or_publisher_required':
+			return m.f_url_or_publisher_required();
+		case 'invalid_slug':
+			return m.f_invalid_slug();
+		case 'unknown_parameter':
+			return m.f_unknown_parameter();
+		case 'stronger_than_version':
+			return m.f_stronger_than_version();
+		case 'invalid_tag':
+			return m.f_invalid_tag();
+		case 'source_not_found':
+			return m.f_source_not_found();
+		case 'too_many':
+			return m.f_too_many({ max: p.max ?? '' });
 		case 'in_future':
 			return m.f_in_future();
 		case 'product_not_found':

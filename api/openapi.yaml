@@ -35,6 +35,7 @@ tags:
   - name: livestock
   - name: water-parameters
   - name: notifications
+  - name: knowledge
   - name: scheduling
 
 paths:
@@ -2049,6 +2050,321 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/Unprocessable" }
 
+  /api/v1/knowledge:
+    get:
+      tags: [knowledge]
+      summary: Published knowledge articles (signed in)
+      description: The live version of each article in `locale`, else in the other locale.
+      parameters:
+        - { name: locale, in: query, schema: { enum: [vi, en], default: vi } }
+        - { name: parameter, in: query, description: Comma-separated or repeated parameter codes., schema: { type: array, items: { type: string } }, style: form, explode: false }
+        - { name: q, in: query, description: Substring of the title or summary., schema: { type: string, maxLength: 100 } }
+      responses:
+        "200":
+          description: Live articles (never paginated; at most 500).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/KnowledgeVersion" } }
+                  next_cursor: { type: "null" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+  /api/v1/knowledge/{slug}:
+    parameters: [{ name: slug, in: path, required: true, schema: { type: string } }]
+    get:
+      tags: [knowledge]
+      summary: A published article with its body, structured lists and sources (signed in)
+      parameters:
+        - { name: locale, in: query, schema: { enum: [vi, en], default: vi } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KnowledgeVersion" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/admin/knowledge/sources:
+    get:
+      tags: [knowledge]
+      summary: Every source
+      description: Editors only (role `administrator`); others get 403. 
+      responses:
+        "200":
+          description: All sources (at most 1000).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/KnowledgeSource" } }
+                  next_cursor: { type: "null" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [knowledge]
+      summary: Add a source
+      description: Editors only (role `administrator`); others get 403. Only real, checkable sources; never generated. `url` must be https; a URL or a publisher is required.
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KnowledgeSourceCreate" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KnowledgeSource" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+  /api/v1/admin/knowledge/articles:
+    get:
+      tags: [knowledge]
+      summary: Every article with each locale's newest version
+      description: Editors only (role `administrator`); others get 403. 
+      responses:
+        "200":
+          description: All articles.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/KnowledgeArticle" } }
+                  next_cursor: { type: "null" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [knowledge]
+      summary: Create an article
+      description: Editors only (role `administrator`); others get 403. 
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [slug, category]
+              properties:
+                slug: { type: string, pattern: "^[a-z0-9]+(-[a-z0-9]+)*$", maxLength: 80 }
+                category: { $ref: "#/components/schemas/KnowledgeCategory" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KnowledgeArticle" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409":
+          description: "`slug_taken`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+  /api/v1/admin/knowledge/articles/{articleID}/retire:
+    parameters: [{ name: articleID, in: path, required: true, schema: { type: string, format: uuid } }]
+    post:
+      tags: [knowledge]
+      summary: Withdraw an article
+      description: Editors only (role `administrator`); others get 403. Its live versions are retired and readers no longer see it; assessments keep citing the versions they used. Audited.
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      responses:
+        "204": { description: Withdrawn. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/admin/knowledge/articles/{articleID}/versions:
+    parameters: [{ name: articleID, in: path, required: true, schema: { type: string, format: uuid } }]
+    get:
+      tags: [knowledge]
+      summary: Every version of an article (without bodies)
+      description: Editors only (role `administrator`); others get 403. 
+      responses:
+        "200":
+          description: All versions, per locale newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/KnowledgeVersion" } }
+                  next_cursor: { type: "null" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [knowledge]
+      summary: Start a draft version in a locale
+      description: Editors only (role `administrator`); others get 403. 
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KnowledgeVersionInput" }
+      responses:
+        "201":
+          description: Draft created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KnowledgeVersion" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`article_retired`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+  /api/v1/admin/knowledge/versions/{versionID}:
+    parameters: [{ name: versionID, in: path, required: true, schema: { type: string, format: uuid } }]
+    get:
+      tags: [knowledge]
+      summary: Any version with its content and sources
+      description: Editors only (role `administrator`); others get 403. 
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KnowledgeVersion" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [knowledge]
+      summary: Replace a draft's content (`revision` required; `locale` is ignored)
+      description: Editors only (role `administrator`); others get 403. Only the draft's author (403 `not_author`; another editor creates a new version instead) and only drafts (a submitted version is frozen, also by a database trigger). A recommendation may not claim more than the version (422 `stronger_than_version`). Audited.
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KnowledgeVersionInput" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KnowledgeVersion" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`not_draft` or `version_conflict`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+  /api/v1/admin/knowledge/versions/{versionID}/submit:
+    parameters: [{ name: versionID, in: path, required: true, schema: { type: string, format: uuid } }]
+    post:
+      tags: [knowledge]
+      summary: Send a draft to review (its content is frozen from now on)
+      description: Editors only (role `administrator`); others get 403. Only the author (403 `not_author`); an `established` version needs a source (422 `source_required`). Audited.
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      responses:
+        "200":
+          description: In review.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KnowledgeVersion" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`not_draft`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/admin/knowledge/versions/{versionID}/publish:
+    parameters: [{ name: versionID, in: path, required: true, schema: { type: string, format: uuid } }]
+    post:
+      tags: [knowledge]
+      summary: Publish a version in review
+      description: |
+        Editors only (role `administrator`); others get 403. Needs an editor other than the
+        author (409 `own_review`; 409 `author_unknown` when the author's account was erased);
+        an `established` version must cite a source (422 `source_required`); an older version
+        can't replace a newer published one (409 `newer_version_live`). The previous live
+        version of the same article and locale is retired. Every decision is kept in
+        `reviews`. Audited.
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                note: { type: [string, "null"], maxLength: 2000 }
+      responses:
+        "200":
+          description: Published.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KnowledgeVersion" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`not_in_review`, `own_review`, `author_unknown`, `newer_version_live` or `article_retired`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+  /api/v1/admin/knowledge/versions/{versionID}/reject:
+    parameters: [{ name: versionID, in: path, required: true, schema: { type: string, format: uuid } }]
+    post:
+      tags: [knowledge]
+      summary: Send a version in review back to draft with a note (required)
+      description: Editors only (role `administrator`); others get 403. Needs an editor other than the author. Audited.
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                note: { type: [string, "null"], maxLength: 2000 }
+      responses:
+        "200":
+          description: Back to draft.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KnowledgeVersion" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`not_in_review` or `own_review`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+
 security:
   - session: []
 
@@ -3107,3 +3423,141 @@ components:
         occurred_at: { type: string, format: date-time, description: When the work was due or missed. }
         read_at: { type: [string, "null"], format: date-time }
         created_at: { type: string, format: date-time }
+    KnowledgeCategory:
+      enum: [water_chemistry, testing, dosing, livestock_health, equipment, maintenance, general]
+    ClaimClass:
+      description: "`established` (documented science or manufacturer data), `expert` (reviewed interpretation), `community` (reported experience), `unverified` (hypothesis). Only the first two back recommendations."
+      enum: [established, expert, community, unverified]
+    KnowledgeSource:
+      type: object
+      required: [id, title, publisher, url, published_on, accessed_on]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        publisher: { type: [string, "null"] }
+        url: { type: [string, "null"] }
+        published_on: { type: [string, "null"], format: date }
+        accessed_on: { type: [string, "null"], format: date }
+        note: { type: string, description: What the version cites from it (in a version's sources). }
+    KnowledgeSourceCreate:
+      type: object
+      additionalProperties: false
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 300 }
+        publisher: { type: [string, "null"], maxLength: 200 }
+        url: { type: [string, "null"], maxLength: 1000, description: https only }
+        published_on: { type: [string, "null"], format: date }
+        accessed_on: { type: [string, "null"], format: date }
+    KnowledgeArticle:
+      type: object
+      required: [id, slug, category, created_at, retired_at, latest]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        category: { $ref: "#/components/schemas/KnowledgeCategory" }
+        created_at: { type: string, format: date-time }
+        retired_at: { type: [string, "null"], format: date-time }
+        latest:
+          type: array
+          items:
+            type: object
+            required: [id, locale, version_no, title, status, updated_at]
+            properties:
+              id: { type: string, format: uuid }
+              locale: { enum: [vi, en] }
+              version_no: { type: integer }
+              title: { type: string }
+              status: { $ref: "#/components/schemas/KnowledgeStatus" }
+              updated_at: { type: string, format: date-time }
+    KnowledgeStatus:
+      enum: [draft, in_review, published, retired]
+    KnowledgeItem:
+      type: object
+      additionalProperties: false
+      required: [key, text]
+      properties:
+        key: { type: string, pattern: "^[a-z][a-z0-9_]{1,59}$" }
+        text: { type: string, minLength: 1, maxLength: 500 }
+    KnowledgeStructured:
+      type: object
+      additionalProperties: false
+      description: Typed lists rules refer to by key (at most 20 each).
+      properties:
+        verifications: { type: array, items: { $ref: "#/components/schemas/KnowledgeItem" } }
+        recommendations:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [key, text, claim_class]
+            properties:
+              key: { type: string, pattern: "^[a-z][a-z0-9_]{1,59}$" }
+              text: { type: string, minLength: 1, maxLength: 500 }
+              claim_class: { $ref: "#/components/schemas/ClaimClass" }
+        contraindications: { type: array, items: { $ref: "#/components/schemas/KnowledgeItem" } }
+        safety_warnings: { type: array, items: { $ref: "#/components/schemas/KnowledgeItem" } }
+    KnowledgeVersionInput:
+      type: object
+      additionalProperties: false
+      required: [title, summary, body_md, claim_class]
+      properties:
+        revision: { type: integer, description: Required when editing a draft. }
+        locale: { enum: [vi, en], description: Required when creating. }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        summary: { type: string, minLength: 1, maxLength: 1000 }
+        body_md: { type: string, minLength: 1, maxLength: 50000, description: Markdown; clients render it as untrusted text (no raw HTML). }
+        claim_class: { $ref: "#/components/schemas/ClaimClass" }
+        parameters: { type: array, maxItems: 20, items: { type: string }, description: Parameter catalog codes. }
+        symptoms: { type: array, maxItems: 20, items: { type: string, pattern: "^[a-z][a-z0-9_]{1,59}$" } }
+        structured: { $ref: "#/components/schemas/KnowledgeStructured" }
+        sources:
+          type: array
+          maxItems: 20
+          items:
+            type: object
+            additionalProperties: false
+            required: [source_id]
+            properties:
+              source_id: { type: string, format: uuid }
+              note: { type: [string, "null"], maxLength: 300 }
+    KnowledgeVersion:
+      type: object
+      required: [id, locale, version_no, title, summary, claim_class, parameters, symptoms, status, published_at]
+      description: Readers get published content only; editor-only fields (author, review, revision) are omitted for them.
+      properties:
+        id: { type: string, format: uuid }
+        article_id: { type: string, format: uuid }
+        slug: { type: string }
+        category: { $ref: "#/components/schemas/KnowledgeCategory" }
+        locale: { enum: [vi, en] }
+        version_no: { type: integer }
+        title: { type: string }
+        summary: { type: string }
+        body_md: { type: string }
+        claim_class: { $ref: "#/components/schemas/ClaimClass" }
+        parameters: { type: array, items: { type: string } }
+        symptoms: { type: array, items: { type: string } }
+        structured: { $ref: "#/components/schemas/KnowledgeStructured" }
+        status: { $ref: "#/components/schemas/KnowledgeStatus" }
+        author_id: { type: string, format: uuid }
+        reviewed_by: { type: string, format: uuid }
+        review_note: { type: string }
+        submitted_at: { type: string, format: date-time }
+        reviewed_at: { type: string, format: date-time }
+        published_at: { type: [string, "null"], format: date-time }
+        retired_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        revision: { type: integer }
+        sources: { type: array, items: { $ref: "#/components/schemas/KnowledgeSource" } }
+        reviews:
+          type: array
+          description: Review history (editors only).
+          items:
+            type: object
+            required: [reviewer_id, decision, note, at]
+            properties:
+              reviewer_id: { type: [string, "null"], format: uuid }
+              decision: { enum: [rejected, published] }
+              note: { type: [string, "null"] }
+              at: { type: string, format: date-time }

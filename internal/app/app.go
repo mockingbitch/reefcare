@@ -20,6 +20,7 @@ import (
 	"reefcare/internal/dosing"
 	"reefcare/internal/equipment"
 	"reefcare/internal/identity"
+	"reefcare/internal/knowledge"
 	"reefcare/internal/livestock"
 	"reefcare/internal/notifications"
 	"reefcare/internal/platform/clock"
@@ -41,7 +42,9 @@ commands:
   serve            run the HTTP API (default)
   migrate up       apply all pending migrations
   migrate down     roll back the most recent migration
-  migrate status   print migration status`
+  migrate status   print migration status
+  roles grant|revoke <email> <role>
+                   grant or revoke moderator/administrator (audited)`
 
 // Run executes the command in args (without the program name) until ctx is cancelled.
 func Run(ctx context.Context, args []string, lookupEnv func(string) (string, bool), stdout, stderr io.Writer) error {
@@ -63,9 +66,32 @@ func Run(ctx context.Context, args []string, lookupEnv func(string) (string, boo
 			return errors.New(usage)
 		}
 		return migrate(ctx, cfg, log, args[1], stdout)
+	case "roles":
+		if len(args) != 4 || (args[1] != "grant" && args[1] != "revoke") {
+			return errors.New(usage)
+		}
+		return roles(ctx, cfg, args[1] == "grant", args[2], args[3], stdout)
 	default:
 		return errors.New(usage)
 	}
+}
+
+func roles(ctx context.Context, cfg config.Config, grant bool, email, role string, stdout io.Writer) error {
+	pool, err := openDB(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	changed, err := identity.SetRole(ctx, pool, clock.System{}, email, role, grant)
+	if err != nil {
+		return err
+	}
+	if !changed {
+		_, err = fmt.Fprintln(stdout, "no change")
+		return err
+	}
+	_, err = fmt.Fprintln(stdout, "done")
+	return err
 }
 
 func openDB(ctx context.Context, cfg config.Config) (*pgxpool.Pool, error) {
@@ -172,6 +198,7 @@ func New(d Deps) App {
 	notifySvc.AddSource(equipment.Reminders)
 	notifySvc.RegisterJobs(runner)
 	notifyHTTP := notifications.NewHandler(notifySvc, idHTTP.RequireAuth, d.Log)
+	kbHTTP := knowledge.NewHandler(knowledge.NewService(d.Pool, d.Clock, d.Log), idHTTP.RequireAuth, d.Log)
 	schedHTTP := scheduling.NewHandler(d.Clock, idHTTP.RequireAuth, d.Log)
 
 	var observe func(http.Handler) http.Handler
@@ -193,6 +220,7 @@ func New(d Deps) App {
 			lsHTTP.Mount(api)
 			wpHTTP.Mount(api)
 			notifyHTTP.Mount(api)
+			kbHTTP.Mount(api)
 			schedHTTP.Mount(api)
 		},
 	})

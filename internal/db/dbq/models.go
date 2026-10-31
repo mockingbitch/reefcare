@@ -125,6 +125,66 @@ type Job struct {
 	FinishedAt  *time.Time
 }
 
+type KnowledgeArticle struct {
+	ID        uuid.UUID
+	Slug      string
+	Category  string
+	CreatedBy *uuid.UUID
+	CreatedAt time.Time
+	RetiredAt *time.Time
+}
+
+type KnowledgeArticleVersion struct {
+	ID          uuid.UUID
+	ArticleID   uuid.UUID
+	Locale      string
+	VersionNo   int32
+	Title       string
+	Summary     string
+	BodyMd      string
+	ClaimClass  string
+	Parameters  []string
+	Symptoms    []string
+	Structured  json.RawMessage
+	Status      string
+	AuthorID    *uuid.UUID
+	SubmittedAt *time.Time
+	ReviewedBy  *uuid.UUID
+	ReviewedAt  *time.Time
+	ReviewNote  *string
+	PublishedAt *time.Time
+	RetiredAt   *time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Version     int32
+}
+
+type KnowledgeSource struct {
+	ID          uuid.UUID
+	Title       string
+	Publisher   *string
+	Url         *string
+	PublishedOn *time.Time
+	AccessedOn  *time.Time
+	CreatedBy   *uuid.UUID
+	CreatedAt   time.Time
+}
+
+type KnowledgeVersionReview struct {
+	ID         uuid.UUID
+	VersionID  uuid.UUID
+	ReviewerID *uuid.UUID
+	Decision   string
+	Note       *string
+	CreatedAt  time.Time
+}
+
+type KnowledgeVersionSource struct {
+	VersionID uuid.UUID
+	SourceID  uuid.UUID
+	Note      *string
+}
+
 type LivestockEntry struct {
 	ID               uuid.UUID
 	TankID           uuid.UUID

@@ -4136,6 +4136,697 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/knowledge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Published knowledge articles (signed in)
+         * @description The live version of each article in `locale`, else in the other locale.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    locale?: "vi" | "en";
+                    /** @description Comma-separated or repeated parameter codes. */
+                    parameter?: string[];
+                    /** @description Substring of the title or summary. */
+                    q?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Live articles (never paginated; at most 500). */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: components["schemas"]["KnowledgeVersion"][];
+                            next_cursor: null;
+                        };
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                422: components["responses"]["Unprocessable"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        /** A published article with its body, structured lists and sources (signed in) */
+        get: {
+            parameters: {
+                query?: {
+                    locale?: "vi" | "en";
+                };
+                header?: never;
+                path: {
+                    slug: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KnowledgeVersion"];
+                    };
+                };
+                401: components["responses"]["Unauthenticated"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/knowledge/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every source
+         * @description Editors only (role `administrator`); others get 403.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description All sources (at most 1000). */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: components["schemas"]["KnowledgeSource"][];
+                            next_cursor: null;
+                        };
+                    };
+                };
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+            };
+        };
+        put?: never;
+        /**
+         * Add a source
+         * @description Editors only (role `administrator`); others get 403. Only real, checkable sources; never generated. `url` must be https; a URL or a publisher is required.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["KnowledgeSourceCreate"];
+                };
+            };
+            responses: {
+                /** @description Created. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KnowledgeSource"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                422: components["responses"]["Unprocessable"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/knowledge/articles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every article with each locale's newest version
+         * @description Editors only (role `administrator`); others get 403.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description All articles. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: components["schemas"]["KnowledgeArticle"][];
+                            next_cursor: null;
+                        };
+                    };
+                };
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+            };
+        };
+        put?: never;
+        /**
+         * Create an article
+         * @description Editors only (role `administrator`); others get 403.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        slug: string;
+                        category: components["schemas"]["KnowledgeCategory"];
+                    };
+                };
+            };
+            responses: {
+                /** @description Created. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KnowledgeArticle"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                /** @description `slug_taken` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                422: components["responses"]["Unprocessable"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/knowledge/articles/{articleID}/retire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                articleID: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Withdraw an article
+         * @description Editors only (role `administrator`); others get 403. Its live versions are retired and readers no longer see it; assessments keep citing the versions they used. Audited.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path: {
+                    articleID: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Withdrawn. */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/knowledge/articles/{articleID}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                articleID: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Every version of an article (without bodies)
+         * @description Editors only (role `administrator`); others get 403.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    articleID: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description All versions, per locale newest first. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: components["schemas"]["KnowledgeVersion"][];
+                            next_cursor: null;
+                        };
+                    };
+                };
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+            };
+        };
+        put?: never;
+        /**
+         * Start a draft version in a locale
+         * @description Editors only (role `administrator`); others get 403.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path: {
+                    articleID: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["KnowledgeVersionInput"];
+                };
+            };
+            responses: {
+                /** @description Draft created. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KnowledgeVersion"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `article_retired` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                422: components["responses"]["Unprocessable"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/knowledge/versions/{versionID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                versionID: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Any version with its content and sources
+         * @description Editors only (role `administrator`); others get 403.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    versionID: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KnowledgeVersion"];
+                    };
+                };
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Replace a draft's content (`revision` required; `locale` is ignored)
+         * @description Editors only (role `administrator`); others get 403. Only the draft's author (403 `not_author`; another editor creates a new version instead) and only drafts (a submitted version is frozen, also by a database trigger). A recommendation may not claim more than the version (422 `stronger_than_version`). Audited.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path: {
+                    versionID: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["KnowledgeVersionInput"];
+                };
+            };
+            responses: {
+                /** @description Updated. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KnowledgeVersion"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `not_draft` or `version_conflict` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                422: components["responses"]["Unprocessable"];
+            };
+        };
+        trace?: never;
+    };
+    "/api/v1/admin/knowledge/versions/{versionID}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                versionID: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a draft to review (its content is frozen from now on)
+         * @description Editors only (role `administrator`); others get 403. Only the author (403 `not_author`); an `established` version needs a source (422 `source_required`). Audited.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path: {
+                    versionID: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description In review. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KnowledgeVersion"];
+                    };
+                };
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `not_draft` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/knowledge/versions/{versionID}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                versionID: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish a version in review
+         * @description Editors only (role `administrator`); others get 403. Needs an editor other than the
+         *     author (409 `own_review`; 409 `author_unknown` when the author's account was erased);
+         *     an `established` version must cite a source (422 `source_required`); an older version
+         *     can't replace a newer published one (409 `newer_version_live`). The previous live
+         *     version of the same article and locale is retired. Every decision is kept in
+         *     `reviews`. Audited.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path: {
+                    versionID: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        note?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Published. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KnowledgeVersion"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `not_in_review`, `own_review`, `author_unknown`, `newer_version_live` or `article_retired` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                422: components["responses"]["Unprocessable"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/knowledge/versions/{versionID}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                versionID: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a version in review back to draft with a note (required)
+         * @description Editors only (role `administrator`); others get 403. Needs an editor other than the author. Audited.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The session's CSRF token (from login or the `__Host-rc_csrf` cookie). */
+                    "X-CSRF-Token": components["parameters"]["CSRF"];
+                };
+                path: {
+                    versionID: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        note?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Back to draft. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KnowledgeVersion"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthenticated"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `not_in_review` or `own_review` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                422: components["responses"]["Unprocessable"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -5115,6 +5806,144 @@ export interface components {
             read_at: string | null;
             /** Format: date-time */
             created_at: string;
+        };
+        /** @enum {unknown} */
+        KnowledgeCategory: "water_chemistry" | "testing" | "dosing" | "livestock_health" | "equipment" | "maintenance" | "general";
+        /**
+         * @description `established` (documented science or manufacturer data), `expert` (reviewed interpretation), `community` (reported experience), `unverified` (hypothesis). Only the first two back recommendations.
+         * @enum {unknown}
+         */
+        ClaimClass: "established" | "expert" | "community" | "unverified";
+        KnowledgeSource: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            publisher: string | null;
+            url: string | null;
+            /** Format: date */
+            published_on: string | null;
+            /** Format: date */
+            accessed_on: string | null;
+            /** @description What the version cites from it (in a version's sources). */
+            note?: string;
+        };
+        KnowledgeSourceCreate: {
+            title: string;
+            publisher?: string | null;
+            /** @description https only */
+            url?: string | null;
+            /** Format: date */
+            published_on?: string | null;
+            /** Format: date */
+            accessed_on?: string | null;
+        };
+        KnowledgeArticle: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            category: components["schemas"]["KnowledgeCategory"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            retired_at: string | null;
+            latest: {
+                /** Format: uuid */
+                id: string;
+                /** @enum {unknown} */
+                locale: "vi" | "en";
+                version_no: number;
+                title: string;
+                status: components["schemas"]["KnowledgeStatus"];
+                /** Format: date-time */
+                updated_at: string;
+            }[];
+        };
+        /** @enum {unknown} */
+        KnowledgeStatus: "draft" | "in_review" | "published" | "retired";
+        KnowledgeItem: {
+            key: string;
+            text: string;
+        };
+        /** @description Typed lists rules refer to by key (at most 20 each). */
+        KnowledgeStructured: {
+            verifications?: components["schemas"]["KnowledgeItem"][];
+            recommendations?: {
+                key: string;
+                text: string;
+                claim_class: components["schemas"]["ClaimClass"];
+            }[];
+            contraindications?: components["schemas"]["KnowledgeItem"][];
+            safety_warnings?: components["schemas"]["KnowledgeItem"][];
+        };
+        KnowledgeVersionInput: {
+            /** @description Required when editing a draft. */
+            revision?: number;
+            /**
+             * @description Required when creating.
+             * @enum {unknown}
+             */
+            locale?: "vi" | "en";
+            title: string;
+            summary: string;
+            /** @description Markdown; clients render it as untrusted text (no raw HTML). */
+            body_md: string;
+            claim_class: components["schemas"]["ClaimClass"];
+            /** @description Parameter catalog codes. */
+            parameters?: string[];
+            symptoms?: string[];
+            structured?: components["schemas"]["KnowledgeStructured"];
+            sources?: {
+                /** Format: uuid */
+                source_id: string;
+                note?: string | null;
+            }[];
+        };
+        /** @description Readers get published content only; editor-only fields (author, review, revision) are omitted for them. */
+        KnowledgeVersion: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            article_id?: string;
+            slug?: string;
+            category?: components["schemas"]["KnowledgeCategory"];
+            /** @enum {unknown} */
+            locale: "vi" | "en";
+            version_no: number;
+            title: string;
+            summary: string;
+            body_md?: string;
+            claim_class: components["schemas"]["ClaimClass"];
+            parameters: string[];
+            symptoms: string[];
+            structured?: components["schemas"]["KnowledgeStructured"];
+            status: components["schemas"]["KnowledgeStatus"];
+            /** Format: uuid */
+            author_id?: string;
+            /** Format: uuid */
+            reviewed_by?: string;
+            review_note?: string;
+            /** Format: date-time */
+            submitted_at?: string;
+            /** Format: date-time */
+            reviewed_at?: string;
+            /** Format: date-time */
+            published_at: string | null;
+            /** Format: date-time */
+            retired_at?: string;
+            /** Format: date-time */
+            updated_at?: string;
+            revision?: number;
+            sources?: components["schemas"]["KnowledgeSource"][];
+            /** @description Review history (editors only). */
+            reviews?: {
+                /** Format: uuid */
+                reviewer_id: string | null;
+                /** @enum {unknown} */
+                decision: "rejected" | "published";
+                note: string | null;
+                /** Format: date-time */
+                at: string;
+            }[];
         };
     };
     responses: {

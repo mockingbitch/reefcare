@@ -458,6 +458,25 @@ func (q *Queries) GetUserForMail(ctx context.Context, id uuid.UUID) (GetUserForM
 	return i, err
 }
 
+const grantUserRole = `-- name: GrantUserRole :execrows
+INSERT INTO user_roles (user_id, role, granted_by, granted_at) VALUES ($1, $2, NULL, $3)
+ON CONFLICT (user_id, role) DO NOTHING
+`
+
+type GrantUserRoleParams struct {
+	UserID uuid.UUID
+	Role   string
+	Now    time.Time
+}
+
+func (q *Queries) GrantUserRole(ctx context.Context, arg GrantUserRoleParams) (int64, error) {
+	result, err := q.db.Exec(ctx, grantUserRole, arg.UserID, arg.Role, arg.Now)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const listUserRoles = `-- name: ListUserRoles :many
 SELECT role FROM user_roles WHERE user_id = $1 ORDER BY role
 `
@@ -721,6 +740,23 @@ type RevokeSessionParams struct {
 // Scoped to the owner so a session id from another user is a no-op (0 rows → 404).
 func (q *Queries) RevokeSession(ctx context.Context, arg RevokeSessionParams) (int64, error) {
 	result, err := q.db.Exec(ctx, revokeSession, arg.Now, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const revokeUserRole = `-- name: RevokeUserRole :execrows
+DELETE FROM user_roles WHERE user_id = $1 AND role = $2
+`
+
+type RevokeUserRoleParams struct {
+	UserID uuid.UUID
+	Role   string
+}
+
+func (q *Queries) RevokeUserRole(ctx context.Context, arg RevokeUserRoleParams) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeUserRole, arg.UserID, arg.Role)
 	if err != nil {
 		return 0, err
 	}

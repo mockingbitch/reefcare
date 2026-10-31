@@ -62,7 +62,13 @@ Designer. Detailed, path-scoped rules live in `.claude/rules/` and load automati
   corrections supersede (append-only triggers), versioned targets, `/latest`, `/trends`; web
   `.../water-tests/`, `#lib/water-tests.js`, SVG `TrendChart.svelte` — D11 decided: no chart
   library). Catalog values are **provisional until the D5 reviewer confirms them** (open item
-  L3/WP1). **Phase 2 is complete.** Next: Phase 3 (Reef Intelligence) — wait for review first.
+  L3/WP1). **Phase 2 is complete.**
+- Active phase: **Phase 3 — Reef Intelligence** (started 2026-10-31 on request). 3.1 knowledge
+  base is done (`internal/knowledge`: articles, per-locale immutable versions, sources, review
+  workflow with four eyes and DB-frozen content; editors = role `administrator`, granted with
+  `api roles grant <email> <role>`; web `/knowledge`, `/admin/knowledge`, `#lib/knowledge.js`).
+  No seed content until the D5 reviewer provides it (open item KB1) — never generate articles
+  or sources. Rule thresholds stay provisional until D5 confirms them.
 - Unfinished work, known gaps and pending decisions are tracked in `docs/open-items.md`;
   update it when an item is completed or a new gap is found.
 - Go module path is `reefcare`. Migrations use sequential numbering (`make migration name=...`).

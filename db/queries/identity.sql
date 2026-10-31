@@ -226,3 +226,10 @@ WHERE id = @id AND status = 'deactivated' AND erased_at IS NULL;
 -- origin). The running erasure job itself is kept: the runner records its outcome.
 DELETE FROM jobs
 WHERE payload->>'user_id' = sqlc.arg(user_id)::uuid::text AND id <> @current_job_id AND status <> 'running';
+
+-- name: GrantUserRole :execrows
+INSERT INTO user_roles (user_id, role, granted_by, granted_at) VALUES (@user_id, @role, NULL, @now)
+ON CONFLICT (user_id, role) DO NOTHING;
+
+-- name: RevokeUserRole :execrows
+DELETE FROM user_roles WHERE user_id = @user_id AND role = @role;

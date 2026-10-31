@@ -46,6 +46,13 @@ export type Target = Schemas['Target'];
 export type TargetInput = Schemas['TargetInput'];
 export type LatestReading = Schemas['LatestReading'];
 export type Trends = Schemas['Trends'];
+export type KnowledgeVersion = Schemas['KnowledgeVersion'];
+export type KnowledgeVersionInput = Schemas['KnowledgeVersionInput'];
+export type KnowledgeStructured = Schemas['KnowledgeStructured'];
+export type KnowledgeArticle = Schemas['KnowledgeArticle'];
+export type KnowledgeSource = Schemas['KnowledgeSource'];
+export type ClaimClass = Schemas['ClaimClass'];
+export type KnowledgeCategory = Schemas['KnowledgeCategory'];
 export type Page<T> = { items: T[]; next_cursor: string | null };
 
 export type ErrorDetail = { field?: string; code: string; params?: Record<string, string> };

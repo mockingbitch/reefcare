@@ -45,6 +45,9 @@ Status: **Draft for review** (Phase 0)
 ## 3. Authorization
 
 - Roles: `user` (implicit), `moderator`, `administrator` in `user_roles`. Rank never authorizes.
+  Roles are granted and revoked only with the CLI (`api roles grant|revoke <email> <role>`,
+  active verified accounts only, audited `role.granted` / `role.revoked`); there is no HTTP
+  endpoint. Knowledge editing requires `administrator`, checked in the service on every call.
 - `tanks.Authorizer` used by every service method on tank-owned data (see
   [architecture.md](architecture.md) §Authorization). Tests include cross-user access for every
   endpoint (table-driven "other user gets 404" suite).
