@@ -1,0 +1,22 @@
+{
+ "dosing_events": [],
+ "dosing_plans": [],
+ "equipment_changes": [],
+ "livestock_events": [],
+ "now": "2026-10-31T12:00:00Z",
+ "readings": [
+  {
+   "id": "00000000-0000-0000-0000-000000000001",
+   "measured_at": "2026-10-30T12:00:00Z",
+   "parameter": "salinity",
+   "unit": "ppt",
+   "value": "34"
+  }
+ ],
+ "setup_date": "2026-10-21T12:00:00Z",
+ "tank_id": "10000000-0000-0000-0000-000000000001",
+ "tank_status": "cycling",
+ "tank_type": "fish_only",
+ "targets": [],
+ "water_changes": []
+}

@@ -143,6 +143,15 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 | KB6 | Revoking the last administrator | P3 | The CLI allows it; recovery is another `roles grant` |
 | KB7 | Abandoned drafts are never deleted | P3 | Versions are referenced by history; add an explicit "discard draft" if clutter grows |
 
+## 3h. Reef Intelligence engine (milestones 3.2/3.3 done)
+
+| # | Item | Priority | Notes |
+|---|---|---|---|
+| IN1 | D5 confirmation of every rule threshold | P1 for release | All values in `internal/intelligence/rules.go` and docs/knowledge-engine.md §5 are provisional; open questions from the domain review: nitrite urgency (warning alone, urgent with ammonia?), hyposalinity handling, a test-kit range-maximum reading treated as "≥", time-of-day for pH comparisons |
+| IN2 | Unit context in ammonia findings | P3 | The verdict uses canonical NH3; add the entered value and unit to the observation |
+| IN3 | `found` events don't offset `missing` in LC-LOSSES | P3 | Minor; a later find is shown in the history |
+| IN4 | Dosing adherence linked to the plan's target parameter | P2 | Needs DS2 |
+
 ## 4. Security and identity follow-ups
 
 | # | Item | Priority | Source | Notes |

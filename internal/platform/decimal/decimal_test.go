@@ -158,3 +158,20 @@ func TestAddSubRound(t *testing.T) {
 		}
 	}
 }
+
+func TestUnmarshalJSON(t *testing.T) {
+	var v struct{ D Decimal }
+	if err := json.Unmarshal([]byte(`{"D":"8.30"}`), &v); err != nil || v.D.String() != "8.3" {
+		t.Fatalf("%v %v", v.D, err)
+	}
+	for _, bad := range []string{`{"D":8.3}`, `{"D":"1e3"}`, `{"D":""}`, `{"D":null}`} {
+		if err := json.Unmarshal([]byte(bad), &v); err == nil {
+			t.Errorf("%s accepted", bad)
+		}
+	}
+	out, _ := json.Marshal(v)
+	var back struct{ D Decimal }
+	if err := json.Unmarshal(out, &back); err != nil || back.D.Cmp(v.D) != 0 {
+		t.Fatalf("round trip %s: %v", out, err)
+	}
+}

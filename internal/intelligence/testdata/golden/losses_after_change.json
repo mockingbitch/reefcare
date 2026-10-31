@@ -1,0 +1,100 @@
+{
+ "findings": [
+  {
+   "rule_id": "LC-LOSSES",
+   "type": "livestock_change",
+   "severity": "warning",
+   "summary": {
+    "key": "lc.summary",
+    "params": {
+     "deaths": "1"
+    }
+   },
+   "observations": [
+    {
+     "text": {
+      "key": "lc.observation",
+      "params": {
+       "events": "1",
+       "individuals": "1"
+      }
+     },
+     "evidence": [
+      {
+       "kind": "livestock_event",
+       "id": "00000000-0000-0000-0000-000000000010"
+      }
+     ]
+    },
+    {
+     "text": {
+      "key": "lc.observation.missing",
+      "params": {
+       "individuals": "1"
+      }
+     },
+     "evidence": [
+      {
+       "kind": "livestock_event",
+       "id": "00000000-0000-0000-0000-000000000011"
+      }
+     ]
+    }
+   ],
+   "hypotheses": [
+    {
+     "key": "recent_change",
+     "text": {
+      "key": "lc.link.recent_change",
+      "params": {
+       "hours": "72"
+      }
+     },
+     "claim_class": "",
+     "correlation": true,
+     "supporting": [
+      {
+       "kind": "equipment_change",
+       "id": "00000000-0000-0000-0000-000000000009"
+      }
+     ],
+     "contradicting": [],
+     "missing": []
+    }
+   ],
+   "alternative_explanations": [],
+   "missing_information": [],
+   "recommended_verifications": [
+    {
+     "text": {
+      "key": "verify.full_test"
+     }
+    },
+    {
+     "text": {
+      "key": "verify.observe_livestock"
+     }
+    }
+   ],
+   "safety_warnings": [
+    {
+     "text": {
+      "key": "safety.welfare_losses"
+     },
+     "urgent": false
+    },
+    {
+     "text": {
+      "key": "safety.escalate"
+     },
+     "urgent": false
+    }
+   ],
+   "knowledge_references": [],
+   "confidence_label": "low"
+  }
+ ],
+ "rule_version": "1.0.0",
+ "provisional": true,
+ "confidence_label": "low"
+}

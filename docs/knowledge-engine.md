@@ -159,6 +159,45 @@ What counts as a loss for `LC-LOSSES` (livestock events, milestone 2.7):
 - **Observations:** `health_observation` and `treatment` notes are the keeper's words. Rules
   never turn them into a disease name and never suggest a treatment.
 
+### As implemented (milestones 3.2/3.3, `internal/intelligence`, rule set 1.0.0)
+
+Pure functions over an authorized snapshot (`Evaluate(Snapshot) Result`), golden-tested on the
+fixtures in `internal/intelligence/testdata`. Changes from the table above, after the
+reef-domain and code reviews:
+- `DQ-IMPLAUSIBLE-JUMP` became `DQ-FAST-CHANGE`: a change beyond kit tolerance, measured per day
+  over at least a day (short gaps never inflate it), between readings 2 h–7 days apart; it may be
+  real (stuck doser, ATO failure), so the wording is "confirm with a re-test", not "test error".
+  Temperature is excluded: fast temperature changes are usually real.
+- `DQ-CONFLICT` only looks at the latest pair; an agreeing re-test resolves an older conflict.
+  Readings of a conflicting pair are left out of swing and trend analysis.
+- A doubtful parameter (fast change or conflict) suppresses `PI-ALK-SWING` and `PI-TREND`; other
+  findings about it stay, with low confidence.
+- New `WB-WELFARE-BOUNDS`: fixed bounds that apply without targets — temperature urgent ≥ 30 °C or
+  ≤ 20 °C (warning > 28.5), salinity urgent < 28 or > 40 ppt (fish-only: "if not intentional"),
+  pH urgent < 7.5 or > 8.7, alkalinity warning < 5 or > 14 dKH (reef types).
+- `NH-AMMONIA-NITRITE`: detected (ammonia ≥ 0.05, nitrite ≥ 0.1) is a warning; urgent at ≥ 0.25
+  mg/L NH3 / ≥ 1 mg/L NO2, for any tank with animals (fish-in cycles included); a fishless
+  cycling tank gets an informational "cycle progress" item; an elevated reading that went stale
+  asks for a re-test. Ammonia and nitrite stay core parameters until a clean reading (and while
+  cycling, go stale after 3 days).
+- `PD-OUT-OF-TARGET` severity grows with the distance outside the target (> half the target
+  width: warning). Its "measurement problem" hypothesis is supported by in-range readings since
+  the deviation began, contradicted by repeated out-of-range ones, and omitted once a second
+  known kit confirms the deviation.
+- `PI-ALK-SWING` needs readings going both up and down (a steady correction is not a swing);
+  confidence at most moderate. `PI-TREND` fits the last 14 days and ignores moves within kit
+  tolerance.
+- `DM-ADHERENCE` counts active manual plans only and reports the records alone: plans have no
+  target parameter yet (open item DS2), so "target parameter trending away" is not checked.
+- `LC-LOSSES` counts individuals (≥ 2 in 7 days) or a death ≤ 72 h after a change (correlation);
+  urgent only together with a welfare or ammonia/nitrite alarm (two deaths can be routine in a
+  large clean-up crew).
+- Temperature findings carry "check heater/chiller now" instead of "no fast corrections".
+- Confidence "high" needs a second *known* method or kit; readings converted from SG never count.
+- Kit tolerances (canonical units): alkalinity 0.5, calcium 25, magnesium 100, pH 0.25,
+  temperature 1, salinity 1.5 (2 when converted from SG), nitrate max(2.5, 20 %), phosphate
+  max(0.05, 15 %), ammonia/nitrite 0.1.
+
 Thresholds are product decisions to be reviewed by a reef-domain reviewer before release
 (decision D5) and live in versioned rule code, not in user-editable config.
 

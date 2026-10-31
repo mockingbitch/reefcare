@@ -1,0 +1,71 @@
+{
+ "findings": [
+  {
+   "rule_id": "NH-AMMONIA-NITRITE",
+   "type": "parameter_deviation",
+   "severity": "urgent",
+   "parameter": "ammonia",
+   "summary": {
+    "key": "nh.summary.urgent",
+    "params": {
+     "parameter": "ammonia"
+    }
+   },
+   "observations": [
+    {
+     "text": {
+      "key": "nh.observation",
+      "params": {
+       "parameter": "ammonia",
+       "threshold": "0.25",
+       "unit": "mg/L NH3",
+       "value": "0.6"
+      }
+     },
+     "evidence": [
+      {
+       "kind": "reading",
+       "id": "00000000-0000-0000-0000-000000000009"
+      }
+     ]
+    }
+   ],
+   "hypotheses": [],
+   "alternative_explanations": [],
+   "missing_information": [],
+   "recommended_verifications": [
+    {
+     "text": {
+      "key": "verify.second_test",
+      "params": {
+       "parameter": "ammonia"
+      }
+     },
+     "parameter": "ammonia"
+    }
+   ],
+   "safety_warnings": [
+    {
+     "text": {
+      "key": "safety.welfare_ammonia_nitrite",
+      "params": {
+       "parameter": "ammonia"
+      }
+     },
+     "urgent": true
+    },
+    {
+     "text": {
+      "key": "safety.escalate"
+     },
+     "urgent": true
+    }
+   ],
+   "knowledge_references": [],
+   "confidence_label": "low"
+  }
+ ],
+ "rule_version": "1.0.0",
+ "provisional": true,
+ "confidence_label": "low"
+}

@@ -240,15 +240,15 @@
     "semantic_hash": "c538e92e3664c3bd65b0cc3b43b20207"
   },
   "internal/platform/decimal/decimal.go": {
-    "mtime": 1793434145.0914695,
-    "seen": 1793436046.1084423,
-    "ast_hash": "268b3ce7e17b3b6a32ce47168b1bdb3b",
+    "mtime": 1793437103.1069877,
+    "seen": 1793439803.803042,
+    "ast_hash": "ff261bd6821932b563d2264ff86d3a3d",
     "semantic_hash": ""
   },
   "internal/platform/decimal/decimal_test.go": {
-    "mtime": 1793434145.091552,
-    "seen": 1793436046.108445,
-    "ast_hash": "62792635b21a382d4713884c009fcdb2",
+    "mtime": 1793437103.1148086,
+    "seen": 1793439803.8030446,
+    "ast_hash": "0f1e78e04bc6e79b7bee9b76c10b6881",
     "semantic_hash": ""
   },
   "internal/platform/httpserver/clientip.go": {
@@ -498,8 +498,8 @@
     "semantic_hash": ""
   },
   "web/src/lib/api/schema.d.ts": {
-    "mtime": 1793435740.8769295,
-    "seen": 1793436046.1113355,
+    "mtime": 1793436047.6765785,
+    "seen": 1793439803.8070674,
     "ast_hash": "16e5d12e75cc5ddedf342e7057d9f65d",
     "semantic_hash": ""
   },
@@ -990,9 +990,9 @@
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1793435273.894529,
-    "seen": 1793436046.1142178,
-    "ast_hash": "fd29bb9338bcaccb5bdf5827d779b90b",
+    "mtime": 1793437662.607514,
+    "seen": 1793439803.815029,
+    "ast_hash": "492efe1ddbdd6350abaae785c9cc5524",
     "semantic_hash": ""
   },
   "README.md": {
@@ -1038,15 +1038,15 @@
     "semantic_hash": ""
   },
   "docs/knowledge-engine.md": {
-    "mtime": 1793435838.509918,
-    "seen": 1793436046.114369,
-    "ast_hash": "28e1a74dd9bf0066adbe242583f1e30e",
+    "mtime": 1793437662.6064847,
+    "seen": 1793439803.8153877,
+    "ast_hash": "9222d506924f113e19969dc8a80f5bd8",
     "semantic_hash": ""
   },
   "docs/open-items.md": {
-    "mtime": 1793435838.5102887,
-    "seen": 1793436046.114371,
-    "ast_hash": "07f7ff836eccf10a59b4d0550c2d0339",
+    "mtime": 1793437662.6071258,
+    "seen": 1793439803.8153903,
+    "ast_hash": "96584290b7d27d2cdd0eff070d6b3d8a",
     "semantic_hash": ""
   },
   "docs/product-requirements.md": {
@@ -1737,6 +1737,264 @@
     "mtime": 1793434145.1030006,
     "seen": 1793436046.1126037,
     "ast_hash": "260030d8712ccc85d7d44d40b377cfb8",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/metrics.go": {
+    "mtime": 1793437560.1555371,
+    "seen": 1793439803.801673,
+    "ast_hash": "94a59e80853acd71d07651b8a4fea6e9",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/metrics_test.go": {
+    "mtime": 1793437575.1602979,
+    "seen": 1793439803.8016768,
+    "ast_hash": "2ac5eaab9cb695532035aa63838a0877",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/model.go": {
+    "mtime": 1793436982.9920788,
+    "seen": 1793439803.8016791,
+    "ast_hash": "26dbb0a326e9240b22faa21982275d12",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/rules.go": {
+    "mtime": 1793437624.6338556,
+    "seen": 1793439803.801681,
+    "ast_hash": "b470926b4e35a09642abca95495b3635",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/rules_test.go": {
+    "mtime": 1793437624.6341434,
+    "seen": 1793439803.8016837,
+    "ast_hash": "1d1af7bee366480e1aa3594583e7a234",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/snapshot.go": {
+    "mtime": 1793437450.610794,
+    "seen": 1793439803.8016856,
+    "ast_hash": "0713ec27de4d8a3dff5469190822cc08",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/fixtures/alk_swing.json": {
+    "mtime": 1793437603.781605,
+    "seen": 1793439803.8016872,
+    "ast_hash": "10df149409bd52c6fe58d600f2eb1372",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/fixtures/alk_three_hours.json": {
+    "mtime": 1793437603.7845402,
+    "seen": 1793439803.8016896,
+    "ast_hash": "b144b846321bc32d89cddae1e6e82cf6",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/fixtures/ammonia_at_threshold.json": {
+    "mtime": 1793437603.7850342,
+    "seen": 1793439803.8016915,
+    "ast_hash": "1d1a39960aadec4cbea95983918f02bf",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/fixtures/ammonia_spike.json": {
+    "mtime": 1793437603.7826264,
+    "seen": 1793439803.8016934,
+    "ast_hash": "d666554bc378bcf3888817da90eec9c7",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/fixtures/conflict.json": {
+    "mtime": 1793437603.7818768,
+    "seen": 1793439803.8016953,
+    "ast_hash": "2a91cc153a2fa4e30a9f44c5bd3d0bc9",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/fixtures/conflict_resolved.json": {
+    "mtime": 1793437603.7848005,
+    "seen": 1793439803.801697,
+    "ast_hash": "502b025b8f7a9f32e7841c1960e1f453",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/fixtures/fish_in_cycle.json": {
+    "mtime": 1793437603.7838185,
+    "seen": 1793439803.8016992,
+    "ast_hash": "cb81f70a56d8bf59941f1288258134d1",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/fixtures/fish_only_cycling.json": {
+    "mtime": 1793437603.7832882,
+    "seen": 1793439803.801701,
+    "ast_hash": "a98b8db2987c408a6b1fcffd87ca3807",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/fixtures/heater_failure.json": {
+    "mtime": 1793437603.7835147,
+    "seen": 1793439803.8017032,
+    "ast_hash": "9e6017fe273f5c7029982f977f5c0d45",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/fixtures/implausible_jump.json": {
+    "mtime": 1793437603.7821252,
+    "seen": 1793439803.8017051,
+    "ast_hash": "861d3bbdf00b73b493ef3d7044375626",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/fixtures/losses_after_change.json": {
+    "mtime": 1793437603.7829099,
+    "seen": 1793439803.8017075,
+    "ast_hash": "06adda95827053187a28df469d175203",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/fixtures/mass_death_one_event.json": {
+    "mtime": 1793437603.7840638,
+    "seen": 1793439803.8017094,
+    "ast_hash": "4ca14a1ea9fa8534aefc4ea31e774210",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/fixtures/no_targets_extremes.json": {
+    "mtime": 1793437603.7836807,
+    "seen": 1793439803.801711,
+    "ast_hash": "e1aeec390ed005466b8d34d6d09328d6",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/fixtures/out_of_target_confirmed.json": {
+    "mtime": 1793437603.7823837,
+    "seen": 1793439803.8017132,
+    "ast_hash": "f9b53ed6dfdf8a318934b2a9dbf498cb",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/fixtures/ph_day_night.json": {
+    "mtime": 1793437603.7842994,
+    "seen": 1793439803.8017154,
+    "ast_hash": "a884cb1f16e3219c4220a59c9a4f9b3b",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/fixtures/stable.json": {
+    "mtime": 1793437603.7810276,
+    "seen": 1793439803.8017173,
+    "ast_hash": "08dad3f75b2f2b398ce4c4bfd5222e5f",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/fixtures/stale.json": {
+    "mtime": 1793437603.781257,
+    "seen": 1793439803.801719,
+    "ast_hash": "ddf14439c7dd11b1d9e01e8c9c4d0369",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/fixtures/trend.json": {
+    "mtime": 1793437603.7831676,
+    "seen": 1793439803.801721,
+    "ast_hash": "a92d0e4f099df6c8926e8440949f0e41",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/golden/alk_swing.json": {
+    "mtime": 1793437626.0769134,
+    "seen": 1793439803.8017235,
+    "ast_hash": "9f731782ab8ee77952394ea1b6b1cec8",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/golden/alk_three_hours.json": {
+    "mtime": 1793437626.0829134,
+    "seen": 1793439803.8017251,
+    "ast_hash": "4f21d31296351c5dd7f294866df7ce8c",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/golden/ammonia_at_threshold.json": {
+    "mtime": 1793437626.0749135,
+    "seen": 1793439803.8017273,
+    "ast_hash": "7dd3cf5b0a1884c1dea7786c76c1defd",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/golden/ammonia_spike.json": {
+    "mtime": 1793437626.0729134,
+    "seen": 1793439803.801729,
+    "ast_hash": "f3093dbde680caeae5af4045e9e2b041",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/golden/conflict.json": {
+    "mtime": 1793437626.0899134,
+    "seen": 1793439803.801731,
+    "ast_hash": "d1d2c7fcda2522f4154349349f3d223c",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/golden/conflict_resolved.json": {
+    "mtime": 1793437626.0879135,
+    "seen": 1793439803.8017328,
+    "ast_hash": "4f21d31296351c5dd7f294866df7ce8c",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/golden/fish_in_cycle.json": {
+    "mtime": 1793437626.0779135,
+    "seen": 1793439803.8017347,
+    "ast_hash": "36ae041c76e71f58030dd874f804ec57",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/golden/fish_only_cycling.json": {
+    "mtime": 1793437626.0689135,
+    "seen": 1793439803.8017366,
+    "ast_hash": "72b51250b1c1bd34389a7b6c389a5f7d",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/golden/heater_failure.json": {
+    "mtime": 1793437626.0779135,
+    "seen": 1793439803.8017385,
+    "ast_hash": "04c643fbb29ba166aedba4d43722debd",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/golden/implausible_jump.json": {
+    "mtime": 1793437626.0849135,
+    "seen": 1793439803.8017402,
+    "ast_hash": "d35db0de596074f46bb2b6f738aef50a",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/golden/losses_after_change.json": {
+    "mtime": 1793437626.0739133,
+    "seen": 1793439803.801742,
+    "ast_hash": "a22ff14630b6c796d2ab7f045e78a1ae",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/golden/mass_death_one_event.json": {
+    "mtime": 1793437626.0789135,
+    "seen": 1793439803.801744,
+    "ast_hash": "b001da3c70f92242171b5e097c6f7ff4",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/golden/no_targets_extremes.json": {
+    "mtime": 1793437626.0749135,
+    "seen": 1793439803.801746,
+    "ast_hash": "5d36af90cacea765311e5bf21adeb7c2",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/golden/out_of_target_confirmed.json": {
+    "mtime": 1793437626.0859134,
+    "seen": 1793439803.8017478,
+    "ast_hash": "89f16e48f4c7df2a743f8df4a5f43f2e",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/golden/ph_day_night.json": {
+    "mtime": 1793437626.0709133,
+    "seen": 1793439803.8017495,
+    "ast_hash": "4f21d31296351c5dd7f294866df7ce8c",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/golden/stable.json": {
+    "mtime": 1793437626.0719135,
+    "seen": 1793439803.8017516,
+    "ast_hash": "4f21d31296351c5dd7f294866df7ce8c",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/golden/stale.json": {
+    "mtime": 1793437626.0889134,
+    "seen": 1793439803.8017533,
+    "ast_hash": "7db79d4dfa55362aa19f9a0c4c6cdaef",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/testdata/golden/trend.json": {
+    "mtime": 1793437626.0869133,
+    "seen": 1793439803.8017552,
+    "ast_hash": "acbd4d2c555da624626558b49fcae1ec",
+    "semantic_hash": ""
+  },
+  "internal/intelligence/validate.go": {
+    "mtime": 1793437560.155836,
+    "seen": 1793439803.8017569,
+    "ast_hash": "c88a4201f6411f1f8a26cda8663e8c85",
     "semantic_hash": ""
   },
   "web/package-lock.json": {

@@ -1,0 +1,69 @@
+{
+ "findings": [
+  {
+   "rule_id": "PD-OUT-OF-TARGET",
+   "type": "parameter_deviation",
+   "severity": "warning",
+   "parameter": "nitrate",
+   "summary": {
+    "key": "pd.summary.above",
+    "params": {
+     "parameter": "nitrate"
+    }
+   },
+   "observations": [
+    {
+     "text": {
+      "key": "pd.observation.above",
+      "params": {
+       "bound": "15",
+       "parameter": "nitrate",
+       "unit": "mg/L NO3",
+       "value": "30"
+      }
+     },
+     "evidence": [
+      {
+       "kind": "reading",
+       "id": "00000000-0000-0000-0000-000000000009"
+      },
+      {
+       "kind": "reading",
+       "id": "00000000-0000-0000-0000-000000000010"
+      }
+     ]
+    }
+   ],
+   "hypotheses": [],
+   "alternative_explanations": [],
+   "missing_information": [],
+   "recommended_verifications": [
+    {
+     "text": {
+      "key": "verify.retest",
+      "params": {
+       "parameter": "nitrate"
+      }
+     },
+     "parameter": "nitrate"
+    }
+   ],
+   "safety_warnings": [
+    {
+     "text": {
+      "key": "safety.no_fast_corrections",
+      "params": {
+       "parameter": "nitrate"
+      }
+     },
+     "urgent": false
+    }
+   ],
+   "knowledge_references": [],
+   "confidence_label": "high"
+  }
+ ],
+ "rule_version": "1.0.0",
+ "provisional": true,
+ "confidence_label": "high"
+}

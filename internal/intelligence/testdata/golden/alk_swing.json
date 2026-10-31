@@ -1,0 +1,343 @@
+{
+ "findings": [
+  {
+   "rule_id": "PI-ALK-SWING",
+   "type": "parameter_instability",
+   "severity": "warning",
+   "parameter": "alkalinity",
+   "summary": {
+    "key": "pi.alk_swing.summary"
+   },
+   "observations": [
+    {
+     "text": {
+      "key": "pi.alk_swing.observation",
+      "params": {
+       "max": "8.6",
+       "min": "7.4",
+       "range": "1.2",
+       "unit": "dKH"
+      }
+     },
+     "evidence": [
+      {
+       "kind": "reading",
+       "id": "00000000-0000-0000-0000-000000000009"
+      },
+      {
+       "kind": "reading",
+       "id": "00000000-0000-0000-0000-000000000010"
+      },
+      {
+       "kind": "reading",
+       "id": "00000000-0000-0000-0000-000000000011"
+      },
+      {
+       "kind": "reading",
+       "id": "00000000-0000-0000-0000-000000000012"
+      }
+     ]
+    }
+   ],
+   "hypotheses": [
+    {
+     "key": "dosing_adherence",
+     "text": {
+      "key": "pi.alk_swing.link.dosing",
+      "params": {
+       "done": "3",
+       "due": "6"
+      }
+     },
+     "claim_class": "",
+     "correlation": true,
+     "supporting": [
+      {
+       "kind": "dosing_event",
+       "id": "00000000-0000-0000-0000-000000000014"
+      },
+      {
+       "kind": "dosing_event",
+       "id": "00000000-0000-0000-0000-000000000015"
+      },
+      {
+       "kind": "dosing_event",
+       "id": "00000000-0000-0000-0000-000000000017"
+      }
+     ],
+     "contradicting": [],
+     "missing": []
+    }
+   ],
+   "alternative_explanations": [],
+   "missing_information": [],
+   "recommended_verifications": [
+    {
+     "text": {
+      "key": "verify.retest",
+      "params": {
+       "parameter": "alkalinity"
+      }
+     },
+     "parameter": "alkalinity"
+    }
+   ],
+   "safety_warnings": [
+    {
+     "text": {
+      "key": "safety.no_fast_corrections",
+      "params": {
+       "parameter": "alkalinity"
+      }
+     },
+     "urgent": false
+    }
+   ],
+   "knowledge_references": [],
+   "confidence_label": "moderate"
+  },
+  {
+   "rule_id": "PD-OUT-OF-TARGET",
+   "type": "parameter_deviation",
+   "severity": "notice",
+   "parameter": "alkalinity",
+   "summary": {
+    "key": "pd.summary.below",
+    "params": {
+     "parameter": "alkalinity"
+    }
+   },
+   "observations": [
+    {
+     "text": {
+      "key": "pd.observation.below",
+      "params": {
+       "bound": "7.8",
+       "parameter": "alkalinity",
+       "unit": "dKH",
+       "value": "7.6"
+      }
+     },
+     "evidence": [
+      {
+       "kind": "reading",
+       "id": "00000000-0000-0000-0000-000000000010"
+      },
+      {
+       "kind": "reading",
+       "id": "00000000-0000-0000-0000-000000000012"
+      }
+     ]
+    }
+   ],
+   "hypotheses": [
+    {
+     "key": "measurement",
+     "text": {
+      "key": "pd.hypothesis.measurement",
+      "params": {
+       "parameter": "alkalinity"
+      }
+     },
+     "claim_class": "",
+     "correlation": false,
+     "supporting": [
+      {
+       "kind": "reading",
+       "id": "00000000-0000-0000-0000-000000000011"
+      }
+     ],
+     "contradicting": [
+      {
+       "kind": "reading",
+       "id": "00000000-0000-0000-0000-000000000012"
+      }
+     ],
+     "missing": [
+      {
+       "text": {
+        "key": "missing.second_kit",
+        "params": {
+         "parameter": "alkalinity"
+        }
+       },
+       "parameter": "alkalinity"
+      }
+     ]
+    }
+   ],
+   "alternative_explanations": [],
+   "missing_information": [],
+   "recommended_verifications": [
+    {
+     "text": {
+      "key": "verify.retest",
+      "params": {
+       "parameter": "alkalinity"
+      }
+     },
+     "parameter": "alkalinity"
+    }
+   ],
+   "safety_warnings": [
+    {
+     "text": {
+      "key": "safety.no_fast_corrections",
+      "params": {
+       "parameter": "alkalinity"
+      }
+     },
+     "urgent": false
+    }
+   ],
+   "knowledge_references": [],
+   "confidence_label": "low"
+  },
+  {
+   "rule_id": "DM-ADHERENCE",
+   "type": "dosing_mismatch",
+   "severity": "notice",
+   "summary": {
+    "key": "dm.summary"
+   },
+   "observations": [
+    {
+     "text": {
+      "key": "dm.observation",
+      "params": {
+       "done": "3",
+       "due": "6"
+      }
+     },
+     "evidence": [
+      {
+       "kind": "dosing_event",
+       "id": "00000000-0000-0000-0000-000000000014"
+      },
+      {
+       "kind": "dosing_event",
+       "id": "00000000-0000-0000-0000-000000000015"
+      },
+      {
+       "kind": "dosing_event",
+       "id": "00000000-0000-0000-0000-000000000017"
+      }
+     ]
+    }
+   ],
+   "hypotheses": [],
+   "alternative_explanations": [],
+   "missing_information": [],
+   "recommended_verifications": [
+    {
+     "text": {
+      "key": "verify.dosing_records"
+     }
+    }
+   ],
+   "safety_warnings": [],
+   "knowledge_references": [],
+   "confidence_label": "moderate"
+  },
+  {
+   "rule_id": "DQ-STALE",
+   "type": "data_quality",
+   "severity": "info",
+   "summary": {
+    "key": "dq.stale.summary",
+    "params": {
+     "count": "3"
+    }
+   },
+   "observations": [],
+   "hypotheses": [],
+   "alternative_explanations": [],
+   "missing_information": [
+    {
+     "text": {
+      "key": "dq.stale.old",
+      "params": {
+       "days": "10",
+       "parameter": "ph"
+      }
+     },
+     "parameter": "ph"
+    },
+    {
+     "text": {
+      "key": "dq.stale.old",
+      "params": {
+       "days": "10",
+       "parameter": "salinity"
+      }
+     },
+     "parameter": "salinity"
+    },
+    {
+     "text": {
+      "key": "dq.stale.old",
+      "params": {
+       "days": "10",
+       "parameter": "temperature"
+      }
+     },
+     "parameter": "temperature"
+    }
+   ],
+   "recommended_verifications": [],
+   "safety_warnings": [],
+   "knowledge_references": [],
+   "confidence_label": "not_assessed"
+  },
+  {
+   "rule_id": "NM-NEXT",
+   "type": "next_measurements",
+   "severity": "info",
+   "summary": {
+    "key": "nm.summary",
+    "params": {
+     "count": "3"
+    }
+   },
+   "observations": [],
+   "hypotheses": [],
+   "alternative_explanations": [],
+   "missing_information": [],
+   "recommended_verifications": [
+    {
+     "text": {
+      "key": "verify.test",
+      "params": {
+       "parameter": "ph"
+      }
+     },
+     "parameter": "ph"
+    },
+    {
+     "text": {
+      "key": "verify.test",
+      "params": {
+       "parameter": "salinity"
+      }
+     },
+     "parameter": "salinity"
+    },
+    {
+     "text": {
+      "key": "verify.test",
+      "params": {
+       "parameter": "temperature"
+      }
+     },
+     "parameter": "temperature"
+    }
+   ],
+   "safety_warnings": [],
+   "knowledge_references": [],
+   "confidence_label": "not_assessed"
+  }
+ ],
+ "rule_version": "1.0.0",
+ "provisional": true,
+ "confidence_label": "low"
+}

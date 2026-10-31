@@ -133,6 +133,20 @@ func (d Decimal) MarshalJSON() ([]byte, error) { return []byte(`"` + d.String() 
 // MarshalText implements encoding.TextMarshaler.
 func (d Decimal) MarshalText() ([]byte, error) { return []byte(d.String()), nil }
 
+// UnmarshalJSON accepts a JSON string in plain decimal notation (the API's wire format);
+// JSON numbers are rejected so no value ever passes through float64.
+func (d *Decimal) UnmarshalJSON(b []byte) error {
+	if len(b) < 2 || b[0] != '"' || b[len(b)-1] != '"' {
+		return ErrSyntax
+	}
+	v, err := Parse(string(b[1 : len(b)-1]))
+	if err != nil {
+		return err
+	}
+	*d = v
+	return nil
+}
+
 // ScanNumeric implements pgtype.NumericScanner.
 func (d *Decimal) ScanNumeric(n pgtype.Numeric) error {
 	if !n.Valid {

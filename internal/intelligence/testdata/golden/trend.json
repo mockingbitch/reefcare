@@ -1,0 +1,237 @@
+{
+ "findings": [
+  {
+   "rule_id": "PI-TREND",
+   "type": "parameter_instability",
+   "severity": "notice",
+   "parameter": "calcium",
+   "summary": {
+    "key": "pi.trend.summary.below",
+    "params": {
+     "parameter": "calcium"
+    }
+   },
+   "observations": [
+    {
+     "text": {
+      "key": "pi.trend.observation",
+      "params": {
+       "days": "12",
+       "parameter": "calcium",
+       "points": "5",
+       "projected": "375.16",
+       "slope": "-3.834",
+       "unit": "mg/L"
+      }
+     },
+     "evidence": [
+      {
+       "kind": "reading",
+       "id": "00000000-0000-0000-0000-000000000009"
+      },
+      {
+       "kind": "reading",
+       "id": "00000000-0000-0000-0000-000000000010"
+      },
+      {
+       "kind": "reading",
+       "id": "00000000-0000-0000-0000-000000000011"
+      },
+      {
+       "kind": "reading",
+       "id": "00000000-0000-0000-0000-000000000012"
+      },
+      {
+       "kind": "reading",
+       "id": "00000000-0000-0000-0000-000000000013"
+      }
+     ]
+    }
+   ],
+   "hypotheses": [],
+   "alternative_explanations": [],
+   "missing_information": [],
+   "recommended_verifications": [
+    {
+     "text": {
+      "key": "verify.retest",
+      "params": {
+       "parameter": "calcium"
+      }
+     },
+     "parameter": "calcium"
+    }
+   ],
+   "safety_warnings": [
+    {
+     "text": {
+      "key": "safety.no_fast_corrections",
+      "params": {
+       "parameter": "calcium"
+      }
+     },
+     "urgent": false
+    }
+   ],
+   "knowledge_references": [],
+   "confidence_label": "low"
+  },
+  {
+   "rule_id": "DQ-STALE",
+   "type": "data_quality",
+   "severity": "info",
+   "summary": {
+    "key": "dq.stale.summary",
+    "params": {
+     "count": "6"
+    }
+   },
+   "observations": [],
+   "hypotheses": [],
+   "alternative_explanations": [],
+   "missing_information": [
+    {
+     "text": {
+      "key": "dq.stale.old",
+      "params": {
+       "days": "20",
+       "parameter": "alkalinity"
+      }
+     },
+     "parameter": "alkalinity"
+    },
+    {
+     "text": {
+      "key": "dq.stale.old",
+      "params": {
+       "days": "20",
+       "parameter": "ph"
+      }
+     },
+     "parameter": "ph"
+    },
+    {
+     "text": {
+      "key": "dq.stale.old",
+      "params": {
+       "days": "20",
+       "parameter": "salinity"
+      }
+     },
+     "parameter": "salinity"
+    },
+    {
+     "text": {
+      "key": "dq.stale.old",
+      "params": {
+       "days": "20",
+       "parameter": "temperature"
+      }
+     },
+     "parameter": "temperature"
+    },
+    {
+     "text": {
+      "key": "dq.stale.old",
+      "params": {
+       "days": "20",
+       "parameter": "nitrate"
+      }
+     },
+     "parameter": "nitrate"
+    },
+    {
+     "text": {
+      "key": "dq.stale.old",
+      "params": {
+       "days": "20",
+       "parameter": "phosphate"
+      }
+     },
+     "parameter": "phosphate"
+    }
+   ],
+   "recommended_verifications": [],
+   "safety_warnings": [],
+   "knowledge_references": [],
+   "confidence_label": "not_assessed"
+  },
+  {
+   "rule_id": "NM-NEXT",
+   "type": "next_measurements",
+   "severity": "info",
+   "summary": {
+    "key": "nm.summary",
+    "params": {
+     "count": "6"
+    }
+   },
+   "observations": [],
+   "hypotheses": [],
+   "alternative_explanations": [],
+   "missing_information": [],
+   "recommended_verifications": [
+    {
+     "text": {
+      "key": "verify.test",
+      "params": {
+       "parameter": "alkalinity"
+      }
+     },
+     "parameter": "alkalinity"
+    },
+    {
+     "text": {
+      "key": "verify.test",
+      "params": {
+       "parameter": "ph"
+      }
+     },
+     "parameter": "ph"
+    },
+    {
+     "text": {
+      "key": "verify.test",
+      "params": {
+       "parameter": "salinity"
+      }
+     },
+     "parameter": "salinity"
+    },
+    {
+     "text": {
+      "key": "verify.test",
+      "params": {
+       "parameter": "temperature"
+      }
+     },
+     "parameter": "temperature"
+    },
+    {
+     "text": {
+      "key": "verify.test",
+      "params": {
+       "parameter": "nitrate"
+      }
+     },
+     "parameter": "nitrate"
+    },
+    {
+     "text": {
+      "key": "verify.test",
+      "params": {
+       "parameter": "phosphate"
+      }
+     },
+     "parameter": "phosphate"
+    }
+   ],
+   "safety_warnings": [],
+   "knowledge_references": [],
+   "confidence_label": "not_assessed"
+  }
+ ],
+ "rule_version": "1.0.0",
+ "provisional": true,
+ "confidence_label": "low"
+}

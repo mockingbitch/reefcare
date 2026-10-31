@@ -1,0 +1,165 @@
+{
+ "findings": [
+  {
+   "rule_id": "PD-OUT-OF-TARGET",
+   "type": "parameter_deviation",
+   "severity": "warning",
+   "parameter": "alkalinity",
+   "summary": {
+    "key": "pd.summary.below",
+    "params": {
+     "parameter": "alkalinity"
+    }
+   },
+   "observations": [
+    {
+     "text": {
+      "key": "pd.observation.below",
+      "params": {
+       "bound": "7.8",
+       "parameter": "alkalinity",
+       "unit": "dKH",
+       "value": "7.2"
+      }
+     },
+     "evidence": [
+      {
+       "kind": "reading",
+       "id": "00000000-0000-0000-0000-000000000010"
+      }
+     ]
+    }
+   ],
+   "hypotheses": [],
+   "alternative_explanations": [],
+   "missing_information": [
+    {
+     "text": {
+      "key": "missing.repeat_test",
+      "params": {
+       "parameter": "alkalinity"
+      }
+     },
+     "parameter": "alkalinity"
+    }
+   ],
+   "recommended_verifications": [
+    {
+     "text": {
+      "key": "verify.retest",
+      "params": {
+       "parameter": "alkalinity"
+      }
+     },
+     "parameter": "alkalinity"
+    }
+   ],
+   "safety_warnings": [
+    {
+     "text": {
+      "key": "safety.no_fast_corrections",
+      "params": {
+       "parameter": "alkalinity"
+      }
+     },
+     "urgent": false
+    }
+   ],
+   "knowledge_references": [],
+   "confidence_label": "low"
+  },
+  {
+   "rule_id": "DQ-CONFLICT",
+   "type": "data_quality",
+   "severity": "notice",
+   "parameter": "alkalinity",
+   "summary": {
+    "key": "dq.conflict.summary",
+    "params": {
+     "parameter": "alkalinity"
+    }
+   },
+   "observations": [
+    {
+     "text": {
+      "key": "dq.conflict.observation",
+      "params": {
+       "a": "8.4",
+       "b": "7.2",
+       "parameter": "alkalinity",
+       "unit": "dKH"
+      }
+     },
+     "evidence": [
+      {
+       "kind": "reading",
+       "id": "00000000-0000-0000-0000-000000000009"
+      },
+      {
+       "kind": "reading",
+       "id": "00000000-0000-0000-0000-000000000010"
+      }
+     ]
+    }
+   ],
+   "hypotheses": [],
+   "alternative_explanations": [],
+   "missing_information": [],
+   "recommended_verifications": [
+    {
+     "text": {
+      "key": "verify.retest",
+      "params": {
+       "parameter": "alkalinity"
+      }
+     },
+     "parameter": "alkalinity"
+    },
+    {
+     "text": {
+      "key": "verify.check_kit",
+      "params": {
+       "parameter": "alkalinity"
+      }
+     },
+     "parameter": "alkalinity"
+    }
+   ],
+   "safety_warnings": [],
+   "knowledge_references": [],
+   "confidence_label": "low"
+  },
+  {
+   "rule_id": "NM-NEXT",
+   "type": "next_measurements",
+   "severity": "info",
+   "summary": {
+    "key": "nm.summary",
+    "params": {
+     "count": "1"
+    }
+   },
+   "observations": [],
+   "hypotheses": [],
+   "alternative_explanations": [],
+   "missing_information": [],
+   "recommended_verifications": [
+    {
+     "text": {
+      "key": "verify.test",
+      "params": {
+       "parameter": "alkalinity"
+      }
+     },
+     "parameter": "alkalinity"
+    }
+   ],
+   "safety_warnings": [],
+   "knowledge_references": [],
+   "confidence_label": "not_assessed"
+  }
+ ],
+ "rule_version": "1.0.0",
+ "provisional": true,
+ "confidence_label": "low"
+}

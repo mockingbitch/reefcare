@@ -69,6 +69,10 @@ Designer. Detailed, path-scoped rules live in `.claude/rules/` and load automati
   `api roles grant <email> <role>`; web `/knowledge`, `/admin/knowledge`, `#lib/knowledge.js`).
   No seed content until the D5 reviewer provides it (open item KB1) — never generate articles
   or sources. Rule thresholds stay provisional until D5 confirms them.
+  3.2/3.3 metrics and rules v1.0.0 are done (`internal/intelligence`: pure `Evaluate(Snapshot)`,
+  11 rules incl. welfare bounds, evidence validation, golden fixtures in `testdata/`; update
+  goldens with `go test ./internal/intelligence -run TestRulesOnFixtures -args -update` only
+  after checking the change). Next: 3.4 assessment service (load snapshot, persist, triggers).
 - Unfinished work, known gaps and pending decisions are tracked in `docs/open-items.md`;
   update it when an item is completed or a new gap is found.
 - Go module path is `reefcare`. Migrations use sequential numbering (`make migration name=...`).

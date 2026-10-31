@@ -1,0 +1,384 @@
+{
+ "findings": [
+  {
+   "rule_id": "WB-WELFARE-BOUNDS",
+   "type": "parameter_deviation",
+   "severity": "urgent",
+   "parameter": "temperature",
+   "summary": {
+    "key": "wb.temperature.low.summary",
+    "params": {
+     "parameter": "temperature"
+    }
+   },
+   "observations": [
+    {
+     "text": {
+      "key": "wb.observation",
+      "params": {
+       "limit": "20",
+       "parameter": "temperature",
+       "unit": "C",
+       "value": "19"
+      }
+     },
+     "evidence": [
+      {
+       "kind": "reading",
+       "id": "00000000-0000-0000-0000-000000000001"
+      }
+     ]
+    }
+   ],
+   "hypotheses": [],
+   "alternative_explanations": [],
+   "missing_information": [],
+   "recommended_verifications": [
+    {
+     "text": {
+      "key": "verify.retest",
+      "params": {
+       "parameter": "temperature"
+      }
+     },
+     "parameter": "temperature"
+    }
+   ],
+   "safety_warnings": [
+    {
+     "text": {
+      "key": "safety.welfare_temperature"
+     },
+     "urgent": true
+    },
+    {
+     "text": {
+      "key": "safety.check_heater_chiller"
+     },
+     "urgent": false
+    },
+    {
+     "text": {
+      "key": "safety.escalate"
+     },
+     "urgent": true
+    }
+   ],
+   "knowledge_references": [],
+   "confidence_label": "low"
+  },
+  {
+   "rule_id": "WB-WELFARE-BOUNDS",
+   "type": "parameter_deviation",
+   "severity": "urgent",
+   "parameter": "salinity",
+   "summary": {
+    "key": "wb.salinity.low.summary",
+    "params": {
+     "parameter": "salinity"
+    }
+   },
+   "observations": [
+    {
+     "text": {
+      "key": "wb.observation",
+      "params": {
+       "limit": "28",
+       "parameter": "salinity",
+       "unit": "ppt",
+       "value": "26"
+      }
+     },
+     "evidence": [
+      {
+       "kind": "reading",
+       "id": "00000000-0000-0000-0000-000000000002"
+      }
+     ]
+    }
+   ],
+   "hypotheses": [],
+   "alternative_explanations": [],
+   "missing_information": [],
+   "recommended_verifications": [
+    {
+     "text": {
+      "key": "verify.retest",
+      "params": {
+       "parameter": "salinity"
+      }
+     },
+     "parameter": "salinity"
+    }
+   ],
+   "safety_warnings": [
+    {
+     "text": {
+      "key": "safety.welfare_salinity"
+     },
+     "urgent": true
+    },
+    {
+     "text": {
+      "key": "safety.no_fast_corrections",
+      "params": {
+       "parameter": "salinity"
+      }
+     },
+     "urgent": false
+    },
+    {
+     "text": {
+      "key": "safety.escalate"
+     },
+     "urgent": true
+    }
+   ],
+   "knowledge_references": [],
+   "confidence_label": "low"
+  },
+  {
+   "rule_id": "WB-WELFARE-BOUNDS",
+   "type": "parameter_deviation",
+   "severity": "urgent",
+   "parameter": "ph",
+   "summary": {
+    "key": "wb.ph.high.summary",
+    "params": {
+     "parameter": "ph"
+    }
+   },
+   "observations": [
+    {
+     "text": {
+      "key": "wb.observation",
+      "params": {
+       "limit": "8.7",
+       "parameter": "ph",
+       "unit": "pH",
+       "value": "8.8"
+      }
+     },
+     "evidence": [
+      {
+       "kind": "reading",
+       "id": "00000000-0000-0000-0000-000000000003"
+      }
+     ]
+    }
+   ],
+   "hypotheses": [],
+   "alternative_explanations": [],
+   "missing_information": [],
+   "recommended_verifications": [
+    {
+     "text": {
+      "key": "verify.retest",
+      "params": {
+       "parameter": "ph"
+      }
+     },
+     "parameter": "ph"
+    }
+   ],
+   "safety_warnings": [
+    {
+     "text": {
+      "key": "safety.welfare_ph"
+     },
+     "urgent": true
+    },
+    {
+     "text": {
+      "key": "safety.no_fast_corrections",
+      "params": {
+       "parameter": "ph"
+      }
+     },
+     "urgent": false
+    },
+    {
+     "text": {
+      "key": "safety.escalate"
+     },
+     "urgent": true
+    }
+   ],
+   "knowledge_references": [],
+   "confidence_label": "low"
+  },
+  {
+   "rule_id": "WB-WELFARE-BOUNDS",
+   "type": "parameter_deviation",
+   "severity": "warning",
+   "parameter": "alkalinity",
+   "summary": {
+    "key": "wb.alkalinity.low.summary",
+    "params": {
+     "parameter": "alkalinity"
+    }
+   },
+   "observations": [
+    {
+     "text": {
+      "key": "wb.observation",
+      "params": {
+       "limit": "5",
+       "parameter": "alkalinity",
+       "unit": "dKH",
+       "value": "4"
+      }
+     },
+     "evidence": [
+      {
+       "kind": "reading",
+       "id": "00000000-0000-0000-0000-000000000004"
+      }
+     ]
+    }
+   ],
+   "hypotheses": [],
+   "alternative_explanations": [],
+   "missing_information": [],
+   "recommended_verifications": [
+    {
+     "text": {
+      "key": "verify.retest",
+      "params": {
+       "parameter": "alkalinity"
+      }
+     },
+     "parameter": "alkalinity"
+    }
+   ],
+   "safety_warnings": [
+    {
+     "text": {
+      "key": "safety.no_fast_corrections",
+      "params": {
+       "parameter": "alkalinity"
+      }
+     },
+     "urgent": false
+    }
+   ],
+   "knowledge_references": [],
+   "confidence_label": "low"
+  },
+  {
+   "rule_id": "DQ-STALE",
+   "type": "data_quality",
+   "severity": "info",
+   "summary": {
+    "key": "dq.stale.summary",
+    "params": {
+     "count": "4"
+    }
+   },
+   "observations": [],
+   "hypotheses": [],
+   "alternative_explanations": [],
+   "missing_information": [
+    {
+     "text": {
+      "key": "dq.stale.never",
+      "params": {
+       "parameter": "calcium"
+      }
+     },
+     "parameter": "calcium"
+    },
+    {
+     "text": {
+      "key": "dq.stale.never",
+      "params": {
+       "parameter": "magnesium"
+      }
+     },
+     "parameter": "magnesium"
+    },
+    {
+     "text": {
+      "key": "dq.stale.never",
+      "params": {
+       "parameter": "nitrate"
+      }
+     },
+     "parameter": "nitrate"
+    },
+    {
+     "text": {
+      "key": "dq.stale.never",
+      "params": {
+       "parameter": "phosphate"
+      }
+     },
+     "parameter": "phosphate"
+    }
+   ],
+   "recommended_verifications": [],
+   "safety_warnings": [],
+   "knowledge_references": [],
+   "confidence_label": "not_assessed"
+  },
+  {
+   "rule_id": "NM-NEXT",
+   "type": "next_measurements",
+   "severity": "info",
+   "summary": {
+    "key": "nm.summary",
+    "params": {
+     "count": "4"
+    }
+   },
+   "observations": [],
+   "hypotheses": [],
+   "alternative_explanations": [],
+   "missing_information": [],
+   "recommended_verifications": [
+    {
+     "text": {
+      "key": "verify.test",
+      "params": {
+       "parameter": "calcium"
+      }
+     },
+     "parameter": "calcium"
+    },
+    {
+     "text": {
+      "key": "verify.test",
+      "params": {
+       "parameter": "magnesium"
+      }
+     },
+     "parameter": "magnesium"
+    },
+    {
+     "text": {
+      "key": "verify.test",
+      "params": {
+       "parameter": "nitrate"
+      }
+     },
+     "parameter": "nitrate"
+    },
+    {
+     "text": {
+      "key": "verify.test",
+      "params": {
+       "parameter": "phosphate"
+      }
+     },
+     "parameter": "phosphate"
+    }
+   ],
+   "safety_warnings": [],
+   "knowledge_references": [],
+   "confidence_label": "not_assessed"
+  }
+ ],
+ "rule_version": "1.0.0",
+ "provisional": true,
+ "confidence_label": "low"
+}

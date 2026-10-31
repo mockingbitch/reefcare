@@ -1,0 +1,74 @@
+{
+ "findings": [
+  {
+   "rule_id": "WB-WELFARE-BOUNDS",
+   "type": "parameter_deviation",
+   "severity": "urgent",
+   "parameter": "temperature",
+   "summary": {
+    "key": "wb.temperature.high.summary",
+    "params": {
+     "parameter": "temperature"
+    }
+   },
+   "observations": [
+    {
+     "text": {
+      "key": "wb.observation",
+      "params": {
+       "limit": "30",
+       "parameter": "temperature",
+       "unit": "C",
+       "value": "32"
+      }
+     },
+     "evidence": [
+      {
+       "kind": "reading",
+       "id": "00000000-0000-0000-0000-000000000009"
+      }
+     ]
+    }
+   ],
+   "hypotheses": [],
+   "alternative_explanations": [],
+   "missing_information": [],
+   "recommended_verifications": [
+    {
+     "text": {
+      "key": "verify.retest",
+      "params": {
+       "parameter": "temperature"
+      }
+     },
+     "parameter": "temperature"
+    }
+   ],
+   "safety_warnings": [
+    {
+     "text": {
+      "key": "safety.welfare_temperature"
+     },
+     "urgent": true
+    },
+    {
+     "text": {
+      "key": "safety.check_heater_chiller"
+     },
+     "urgent": false
+    },
+    {
+     "text": {
+      "key": "safety.escalate"
+     },
+     "urgent": true
+    }
+   ],
+   "knowledge_references": [],
+   "confidence_label": "low"
+  }
+ ],
+ "rule_version": "1.0.0",
+ "provisional": true,
+ "confidence_label": "low"
+}
