@@ -55,6 +55,11 @@ type Config struct {
 	// JobWorkers is the number of background jobs run concurrently by this instance.
 	JobWorkers      int
 	JobPollInterval time.Duration
+
+	// LLMProvider selects the optional narrative adapter of Reef Intelligence
+	// (docs/knowledge-engine.md §8). Only "none" exists: deterministic assessments work
+	// without any LLM, and adding a provider is a reviewed decision (open item IN13).
+	LLMProvider string
 }
 
 // SecureCookies reports whether cookies must carry the Secure attribute.
@@ -88,6 +93,7 @@ func Load(lookup func(string) (string, bool)) (Config, error) {
 		Argon2MaxConcurrent: p.intRange("ARGON2_MAX_CONCURRENCY", 0, 0, 256),
 		JobWorkers:          p.intRange("JOB_WORKERS", 4, 1, 64),
 		JobPollInterval:     p.duration("JOB_POLL_INTERVAL", time.Second),
+		LLMProvider:         p.oneOf("LLM_PROVIDER", "none", "none"),
 	}
 	if cfg.PublicBaseURL == "" && !cfg.IsProduction() {
 		cfg.PublicBaseURL = "http://localhost:8080"

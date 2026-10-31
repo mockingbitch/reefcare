@@ -37,12 +37,20 @@ type Source func(ctx context.Context, q *dbq.Queries, tankID uuid.UUID, since ti
 // Service runs the assessment pipeline (docs/knowledge-engine.md §3): authorize, load the
 // snapshot, evaluate the rules, resolve knowledge, validate and persist.
 type Service struct {
-	pool    *pgxpool.Pool
-	clock   clock.Clock
-	authz   tanks.Authorizer
-	log     *slog.Logger
-	sources []Source
-	manual  *ratelimit.Limiter
+	pool     *pgxpool.Pool
+	clock    clock.Clock
+	authz    tanks.Authorizer
+	log      *slog.Logger
+	sources  []Source
+	manual   *ratelimit.Limiter
+	narrator *guardedNarrator // nil: no LLM (the default)
+}
+
+// SetNarrator enables an optional narrative generator (LLM_PROVIDER). Call during wiring.
+func (s *Service) SetNarrator(gen NarrativeGenerator) {
+	if gen != nil {
+		s.narrator = newGuardedNarrator(gen, s.clock, s.log)
+	}
 }
 
 // NewService wires the service.
@@ -161,15 +169,35 @@ func (s *Service) runAfterTest(ctx context.Context, j jobs.Job) error {
 // already assessed, or allow declined).
 func (s *Service) run(ctx context.Context, tankID uuid.UUID, trigger string, sourceID, requester *uuid.UUID, allow func(*dbq.Queries) (bool, error)) (*uuid.UUID, error) {
 	now := s.clock.Now()
-	var snap Snapshot
+	var (
+		snap             Snapshot
+		res              Result
+		locale           = "vi"
+		knowledgeVersion string
+	)
 	if err := database.InReadSnapshotTx(ctx, s.pool, func(tx pgx.Tx) error {
+		q := dbq.New(tx)
 		var err error
-		snap, err = s.Snapshot(ctx, dbq.New(tx), tankID, now)
+		if snap, err = s.Snapshot(ctx, q, tankID, now); err != nil {
+			return err
+		}
+		if requester != nil {
+			if l, err := q.GetUserLocale(ctx, *requester); err == nil {
+				locale = l
+			} else if !database.IsNoRows(err) {
+				return err
+			}
+		}
+		res = Evaluate(snap)
+		knowledgeVersion, err = attachKnowledge(ctx, q, &res, locale)
 		return err
 	}); err != nil {
 		return nil, err
 	}
-	res := Evaluate(snap)
+	// Optional wording, outside any transaction (an external call); never required.
+	if s.narrator != nil {
+		res.Narrative = s.narrator.narrate(ctx, res, locale)
+	}
 	snapshot, err := json.Marshal(snap)
 	if err != nil {
 		return nil, fmt.Errorf("encode snapshot: %w", err)
@@ -184,7 +212,7 @@ func (s *Service) run(ctx context.Context, tankID uuid.UUID, trigger string, sou
 			return err
 		}
 		var err error
-		id, err = s.persist(ctx, q, tankID, trigger, sourceID, requester, now, res, snapshot)
+		id, err = s.persist(ctx, q, tankID, trigger, sourceID, requester, now, res, snapshot, locale, knowledgeVersion)
 		return err
 	})
 	return id, err
@@ -192,19 +220,7 @@ func (s *Service) run(ctx context.Context, tankID uuid.UUID, trigger string, sou
 
 // persist stores an evaluated assessment with its evidence, knowledge references and timeline
 // event (one transaction).
-func (s *Service) persist(ctx context.Context, q *dbq.Queries, tankID uuid.UUID, trigger string, sourceID, requester *uuid.UUID, now time.Time, res Result, snapshot []byte) (*uuid.UUID, error) {
-	locale := "vi"
-	if requester != nil {
-		if l, err := q.GetUserLocale(ctx, *requester); err == nil {
-			locale = l
-		} else if !database.IsNoRows(err) {
-			return nil, err
-		}
-	}
-	knowledgeVersion, err := attachKnowledge(ctx, q, &res, locale)
-	if err != nil {
-		return nil, err
-	}
+func (s *Service) persist(ctx context.Context, q *dbq.Queries, tankID uuid.UUID, trigger string, sourceID, requester *uuid.UUID, now time.Time, res Result, snapshot []byte, locale, knowledgeVersion string) (*uuid.UUID, error) {
 	result, err := json.Marshal(res)
 	if err != nil {
 		return nil, fmt.Errorf("encode assessment: %w", err)

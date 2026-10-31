@@ -179,5 +179,6 @@
  ],
  "rule_version": "1.0.0",
  "provisional": true,
- "confidence_label": "low"
+ "confidence_label": "low",
+ "narrative": null
 }

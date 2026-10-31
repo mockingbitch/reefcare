@@ -982,5 +982,8 @@
 	"ia_kind_dosing_events": "sự kiện dosing",
 	"ia_kind_water_changes": "lần thay nước",
 	"ia_kind_equipment_changes": "thay đổi thiết bị",
-	"ia_kind_livestock_events": "sự kiện sinh vật"
+	"ia_kind_livestock_events": "sự kiện sinh vật",
+	"ia_narrative_title": "Diễn giải tự động",
+	"ia_narrative_note": "Do máy diễn đạt lại từ các nhận định ở trên; không thay thế chúng và có thể không chính xác.",
+	"ia_narrative_hypotheses": "Gợi ý chưa kiểm chứng"
 }

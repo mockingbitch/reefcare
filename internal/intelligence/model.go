@@ -113,4 +113,6 @@ type Result struct {
 	// Confidence is the lowest confidence among findings that were assessed, or
 	// not_assessed when no rule could assess anything.
 	Confidence string `json:"confidence_label"`
+	// Narrative is optional generated wording (null without an LLM, or when it failed).
+	Narrative *Narrative `json:"narrative"`
 }

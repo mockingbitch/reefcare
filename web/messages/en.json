@@ -982,5 +982,8 @@
 	"ia_kind_dosing_events": "dosing events",
 	"ia_kind_water_changes": "water changes",
 	"ia_kind_equipment_changes": "equipment changes",
-	"ia_kind_livestock_events": "livestock events"
+	"ia_kind_livestock_events": "livestock events",
+	"ia_narrative_title": "Generated wording",
+	"ia_narrative_note": "Machine-written rewording of the findings above; it doesn't replace them and may be inaccurate.",
+	"ia_narrative_hypotheses": "Unverified suggestions"
 }

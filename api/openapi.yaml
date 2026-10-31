@@ -3798,6 +3798,34 @@ components:
         created_at: { type: string, format: date-time }
         findings: { type: array, description: Only in single-assessment responses., items: { $ref: "#/components/schemas/Finding" } }
         my_feedback: { $ref: "#/components/schemas/AssessmentFeedback" }
+        narrative:
+          description: |
+            Optional generated wording (LLM_PROVIDER; none by default, so absent). Untrusted text
+            validated against the findings: explanations of existing findings and hypotheses that
+            cite only facts and knowledge the finding already cites. Render as plain text, labelled.
+          type: object
+          required: [provider, summary, explanations, hypotheses]
+          properties:
+            provider: { type: string }
+            summary: { type: string }
+            explanations:
+              type: array
+              items:
+                type: object
+                required: [finding_index, text]
+                properties:
+                  finding_index: { type: integer }
+                  text: { type: string }
+            hypotheses:
+              type: array
+              items:
+                type: object
+                required: [finding_index, text, supporting]
+                properties:
+                  finding_index: { type: integer }
+                  text: { type: string }
+                  supporting: { type: array, items: { $ref: "#/components/schemas/EvidenceRef" } }
+                  knowledge_version_ids: { type: array, items: { type: string, format: uuid } }
     AssessmentFeedback:
       type: object
       required: [rating, outcome_note, updated_at]

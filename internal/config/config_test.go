@@ -181,3 +181,13 @@ func TestLoadValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestLLMProvider(t *testing.T) {
+	cfg, err := Load(env(map[string]string{"DATABASE_URL": "postgres://localhost/db"}))
+	if err != nil || cfg.LLMProvider != "none" {
+		t.Fatalf("default: %q %v", cfg.LLMProvider, err)
+	}
+	if _, err := Load(env(map[string]string{"DATABASE_URL": "postgres://localhost/db", "LLM_PROVIDER": "openai"})); err == nil || !strings.Contains(err.Error(), "LLM_PROVIDER") {
+		t.Fatalf("unknown provider accepted: %v", err)
+	}
+}

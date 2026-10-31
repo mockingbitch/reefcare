@@ -157,6 +157,7 @@ go-reviewer and security-auditor; their findings were fixed or are listed below.
 | IN8 | Retention of automatic assessments | P3 | Each keeps a snapshot (≤ 3.5 MB); bounded to 24 per tank per day, but nothing is ever purged. Consider keeping only the latest automatic one per day after 90 days |
 | IN11 | Reviewer view of "wrong" feedback | P2 | Feedback is stored (index on wrong ratings) but no admin page lists it yet; reviewers query it for now |
 | IN12 | Evidence drill-down in the web app | P3 | Findings show how many facts back them; linking each to its reading or event page is not built |
+| IN13 | LLM narrative provider | P3 | Interface, validation, guard and `LLM_PROVIDER=none` exist (3.6). Choosing a provider needs: data-processing review (findings and knowledge titles leave the system), API key in the secret manager, a prompt reviewed for the safety rules, and tests with recorded responses |
 
 ## 4. Security and identity follow-ups
 

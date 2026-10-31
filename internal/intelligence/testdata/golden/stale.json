@@ -170,5 +170,6 @@
  ],
  "rule_version": "1.0.0",
  "provisional": true,
- "confidence_label": "not_assessed"
+ "confidence_label": "not_assessed",
+ "narrative": null
 }

@@ -206,6 +206,8 @@ func New(d Deps) App {
 	intelSvc.AddSource(equipment.ForAssessment)
 	intelSvc.AddSource(livestock.ForAssessment)
 	intelSvc.RegisterJobs(runner)
+	// LLM_PROVIDER: only "none" exists (config rejects anything else); a provider would be
+	// passed to intelSvc.SetNarrator here.
 	intelHTTP := intelligence.NewHandler(intelSvc, idHTTP.RequireAuth, d.Log)
 	kbHTTP := knowledge.NewHandler(knowledge.NewService(d.Pool, d.Clock, d.Log), idHTTP.RequireAuth, d.Log)
 	schedHTTP := scheduling.NewHandler(d.Clock, idHTTP.RequireAuth, d.Log)

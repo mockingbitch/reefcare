@@ -233,6 +233,13 @@ type NarrativeGenerator interface {
   is returned unchanged (`narrative: null`).
 - Provider configured by `LLM_PROVIDER` (default `none`).
 
+As implemented (3.6, `internal/intelligence/narrative.go`): the interface, `ValidateNarrative`
+(explanations of existing findings; hypotheses that cite only facts and knowledge versions the
+finding already cites; length and character checks), a guard with a 10 s timeout, no retries and
+a circuit breaker (5 consecutive failures → 5 min pause), called outside any transaction. Only
+`LLM_PROVIDER=none` exists (decided 2026-10-31); a provider is a separate, reviewed change (open
+item IN13). Narrative hypotheses are shown apart from the findings, as unverified.
+
 ## 9. Testing
 
 Fixture tanks in `internal/intelligence/testdata/` (JSON): stable tank, alk swing, stale data,

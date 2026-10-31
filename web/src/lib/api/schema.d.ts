@@ -6311,6 +6311,25 @@ export interface components {
             /** @description Only in single-assessment responses. */
             findings?: components["schemas"]["Finding"][];
             my_feedback?: components["schemas"]["AssessmentFeedback"];
+            /**
+             * @description Optional generated wording (LLM_PROVIDER; none by default, so absent). Untrusted text
+             *     validated against the findings: explanations of existing findings and hypotheses that
+             *     cite only facts and knowledge the finding already cites. Render as plain text, labelled.
+             */
+            narrative?: {
+                provider: string;
+                summary: string;
+                explanations: {
+                    finding_index: number;
+                    text: string;
+                }[];
+                hypotheses: {
+                    finding_index: number;
+                    text: string;
+                    supporting: components["schemas"]["EvidenceRef"][];
+                    knowledge_version_ids?: string[];
+                }[];
+            };
         };
         AssessmentFeedback: {
             /** @enum {unknown} */

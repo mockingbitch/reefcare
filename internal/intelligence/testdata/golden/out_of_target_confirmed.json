@@ -65,5 +65,6 @@
  ],
  "rule_version": "1.0.0",
  "provisional": true,
- "confidence_label": "high"
+ "confidence_label": "high",
+ "narrative": null
 }

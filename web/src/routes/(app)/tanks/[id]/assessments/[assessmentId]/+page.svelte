@@ -228,6 +228,22 @@
 		{/each}
 	{/if}
 
+	{#if a.narrative}
+		<!-- Untrusted generated text: plain text only, clearly labelled. -->
+		<section class="card" aria-labelledby="narrative">
+			<h2 id="narrative">{m.ia_narrative_title()}</h2>
+			<p class="muted small">{m.ia_narrative_note()}</p>
+			{#if a.narrative.summary}<p>{a.narrative.summary}</p>{/if}
+			{#each a.narrative.explanations as x, j (j)}<p>{x.text}</p>{/each}
+			{#if a.narrative.hypotheses.length}
+				<h3>{m.ia_narrative_hypotheses()}</h3>
+				<ul>
+					{#each a.narrative.hypotheses as h, j (j)}<li>{h.text}</li>{/each}
+				</ul>
+			{/if}
+		</section>
+	{/if}
+
 	<section class="card" aria-labelledby="fb">
 		<h2 id="fb">{m.ia_feedback_title()}</h2>
 		<form onsubmit={sendFeedback}>

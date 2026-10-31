@@ -62,6 +62,7 @@ type assessmentResponse struct {
 	RetractReason    *string           `json:"retract_reason,omitempty"`
 	CreatedAt        time.Time         `json:"created_at"`
 	Findings         []Finding         `json:"findings,omitempty"`
+	Narrative        *Narrative        `json:"narrative,omitempty"`
 	MyFeedback       *feedbackResponse `json:"my_feedback,omitempty"`
 }
 
@@ -84,6 +85,7 @@ func toResponse(a Assessment) assessmentResponse {
 		out.MyFeedback = toFeedback(*a.MyFeedback)
 	}
 	if a.Result != nil {
+		out.Narrative = a.Result.Narrative
 		out.Findings = a.Result.Findings
 		if out.Findings == nil {
 			out.Findings = []Finding{}
